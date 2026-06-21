@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ao vivo — {{ club }}</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+{% include "_head.html" %}
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <img src="/static/logo.png" alt="{{ club }}">
+      <span class="name">Guerra<small>Clube de Tiro</small></span>
+    </a>
+    <span class="spacer"></span>
+    <a class="live-pill" href="/agora"><span class="live-dot"></span>Ao vivo</a>
+  </div>
+</header>
+
+<section class="hero">
+  <svg class="reticle" viewBox="0 0 200 200" aria-hidden="true">
+    <circle class="ring" cx="100" cy="100" r="86"/>
+    <circle class="ring" cx="100" cy="100" r="58"/>
+    <line class="tick" x1="100" y1="2" x2="100" y2="34"/>
+    <line class="tick" x1="100" y1="166" x2="100" y2="198"/>
+    <line class="tick" x1="2" y1="100" x2="34" y2="100"/>
+    <line class="tick" x1="166" y1="100" x2="198" y2="100"/>
+    <circle class="dot" cx="100" cy="100" r="5"/>
+  </svg>
+  <div class="wrap">
+    <span class="eyebrow">
+      <svg class="cross" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M12 1v5M12 18v5M1 12h5M18 12h5" stroke="currentColor" stroke-width="1.6"/>
+      </svg>
+      Etapa ao vivo
+    </span>
+    <h1 id="stage-title">—</h1>
+    <p class="updated" id="updated"></p>
+    <p class="hero-sub" style="margin-top:6px">
+      Os tempos aparecem aqui conforme a linha de tiro lança. A página atualiza sozinha.
+      <a href="/" style="color:var(--gold); text-decoration:none; white-space:nowrap">Ver classificação do mês ›</a>
+    </p>
+  </div>
+</section>
+
+<main class="wrap">
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <div id="panels"></div>
+  <div class="empty" id="empty" style="display:none">Nenhuma etapa aberta no momento.</div>
+  <noscript><div class="empty">Ative o JavaScript para ver os tempos ao vivo.</div></noscript>
+</main>
+
+{% include "_footer.html" %}
+
+<script>
+  var DATA = {{ data|tojson }};
+  var activeId = null;
+
+  function esc(s){var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML;}
+
+  function panelHTML(sec){
+    var head =
+      '<div class="card-head"><div>' +
+        '<div class="mod">'+esc(sec.modality_label)+'</div>' +
+        '<h2>'+esc(sec.category)+'</h2>' +
+      '</div></div>';
+    var body;
+    if(sec.rows && sec.rows.length){
+      var trs = sec.rows.map(function(r){
+        var cls = r.pos<=3 ? 'top'+r.pos : '';
+        return '<tr class="'+cls+'">' +
+          '<td class="pos"><span class="pos-badge">'+r.pos+'</span></td>' +
+          '<td class="ath">'+esc(r.name)+'</td>' +
+          '<td class="time-cell">'+esc(r.time)+'s</td>' +
+          '<td class="pts-cell">'+esc(r.points)+'</td>' +
+        '</tr>';
+      }).join('');
+      body = '<div class="tbl-scroll"><table class="live-tbl">' +
+        '<thead><tr><th class="pos">#</th><th class="ath">Atirador</th>' +
+        '<th>Tempo</th><th>Pts</th></tr></thead><tbody>'+trs+'</tbody></table></div>';
+    } else {
+      body = '<div class="pending" style="border-top:none">Aguardando o primeiro tempo desta categoria.</div>';
+    }
+    var pend = '';
+    if(sec.pending && sec.pending.length){
+      var chips = sec.pending.map(function(p){
+        return '<span class="chip'+(p.dq?' dq':'')+'">'+esc(p.name)+(p.dq?' · DQ':'')+'</span>';
+      }).join('');
+      pend = '<div class="pending"><b>Ainda na fila</b>'+chips+'</div>';
+    }
+    return '<div class="card">'+head+body+pend+'</div>';
+  }
+
+  function render(data){
+    var tabs = document.getElementById('tabs');
+    var panels = document.getElementById('panels');
+    var empty = document.getElementById('empty');
+    document.getElementById('stage-title').textContent =
+      data.open ? (data.stage_label + ' · ' + data.date) : 'Sem etapa aberta';
+    document.getElementById('updated').innerHTML = data.open && data.updated ?
+      '<span class="live-dot"></span>Atualizado às ' + esc(data.updated) : '';
+
+    if(!data.open || !data.sections || !data.sections.length){
+      tabs.innerHTML=''; panels.innerHTML='';
+      empty.style.display='block';
+      empty.textContent = data.open ? 'Ainda não há atiradores inscritos nesta etapa.'
+                                    : 'Nenhuma etapa aberta no momento.';
+      return;
+    }
+    empty.style.display='none';
+
+    var ids = data.sections.map(function(s){return s.id;});
+    if(activeId===null || ids.indexOf(activeId)<0) activeId = ids[0];
+
+    tabs.innerHTML = data.sections.map(function(s){
+      var a = s.id===activeId ? ' active' : '';
+      return '<button class="tab'+a+'" data-target="'+s.id+'">' +
+        '<span class="mod">'+esc(s.modality_label)+'</span> · '+esc(s.category)+'</button>';
+    }).join('');
+
+    panels.innerHTML = data.sections.map(function(s){
+      var a = s.id===activeId ? ' active' : '';
+      return '<section class="panel'+a+'" id="'+s.id+'">'+panelHTML(s)+'</section>';
+    }).join('');
+
+    tabs.querySelectorAll('.tab').forEach(function(tab){
+      tab.addEventListener('click', function(){
+        activeId = tab.getAttribute('data-target');
+        tabs.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+        panels.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(activeId).classList.add('active');
+      });
+    });
+  }
+
+  render(DATA);
+
+  async function poll(){
+    try{
+      var r = await fetch('/api/agora', {cache:'no-store'});
+      if(r.ok){ render(await r.json()); }
+    }catch(e){}
+  }
+  setInterval(poll, 20000);
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) poll();
+  });
+</script>
+</body>
+</html>

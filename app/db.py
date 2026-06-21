@@ -275,17 +275,29 @@ def default_category_id(conn, modality: str) -> int:
 # MESES / ETAPAS
 # ----------------------------------------------------------------------------
 def ensure_current_month(conn) -> sqlite3.Row:
-    today = date.today()
-    row = conn.execute(
-        "SELECT * FROM months WHERE year=? AND month=?",
-        (today.year, today.month)).fetchone()
-    if row is None:
-        conn.execute(
-            "INSERT INTO months(year,month,status,created_at) VALUES (?,?, 'aberto', ?)",
-            (today.year, today.month, now()))
-        row = conn.execute("SELECT * FROM months WHERE year=? AND month=?",
-                           (today.year, today.month)).fetchone()
-    return row
+    """Garante que exista UM mês de competição aberto e o devolve.
+    Se já houver um aberto, devolve esse. Senão, abre o mês seguinte ao
+    último existente (ou o mês do calendário, se o banco estiver vazio)."""
+    m = get_open_month(conn)
+    if m:
+        return m
+    latest = conn.execute(
+        "SELECT * FROM months ORDER BY year DESC, month DESC LIMIT 1").fetchone()
+    if latest:
+        y, mo = latest["year"], latest["month"] + 1
+        if mo > 12:
+            mo = 1
+            y += 1
+    else:
+        today = date.today()
+        y, mo = today.year, today.month
+    conn.execute(
+        "INSERT OR IGNORE INTO months(year,month,status,created_at) "
+        "VALUES (?,?, 'aberto', ?)", (y, mo, now()))
+    conn.execute("UPDATE months SET status='aberto' WHERE year=? AND month=?",
+                 (y, mo))
+    return conn.execute("SELECT * FROM months WHERE year=? AND month=?",
+                        (y, mo)).fetchone()
 
 
 def get_open_month(conn) -> Optional[sqlite3.Row]:

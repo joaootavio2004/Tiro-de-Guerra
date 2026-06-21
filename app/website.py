@@ -45,8 +45,78 @@ def _fmt_date_long(iso):
     return str(iso)
 
 
+def open_stage_payload(conn):
+    """Dados da etapa ABERTA para a página ao vivo (tempos sendo lançados)."""
+    from datetime import datetime
+    stage = db.get_open_stage(conn)
+    if not stage:
+        return {"open": False}
+    sections = []
+    for modality, cat_name in SECTION_ORDER:
+        cat = conn.execute(
+            "SELECT * FROM categories WHERE modality=? AND name=?",
+            (modality, cat_name)).fetchone()
+        if not cat:
+            continue
+        enrolls = conn.execute(
+            "SELECT e.id AS eid, e.shooter_id AS sid, s.name AS nm "
+            "FROM enrollments e JOIN shooters s ON s.id=e.shooter_id "
+            "WHERE e.stage_id=? AND e.modality=? AND e.category_id=? ORDER BY s.name",
+            (stage["id"], modality, cat["id"])).fetchall()
+        if not enrolls:
+            continue
+        ranked, pending = [], []
+        for e in enrolls:
+            br = db.best_run(conn, e["eid"])
+            if br:
+                ranked.append({"name": e["nm"], "ft": br["final_time"]})
+            else:
+                pending.append({"name": e["nm"],
+                                "dq": db.any_dq(conn, e["eid"])})
+        ranked.sort(key=lambda r: r["ft"])
+        best = ranked[0]["ft"] if ranked else None
+        rows = []
+        for i, r in enumerate(ranked, 1):
+            pts = 100.0 if r["ft"] == best else best / r["ft"] * 100
+            rows.append({"pos": i, "name": r["name"],
+                         "time": f"{r['ft']:.2f}", "points": f"{pts:.2f}"})
+        sections.append({
+            "id": f"{modality}-{cat['id']}",
+            "modality_label": "Pistola" if modality == "pistola" else "Carabina",
+            "category": cat_name, "rows": rows, "pending": pending,
+        })
+    return {
+        "open": True,
+        "stage_label": f"{stage['number']}ª Etapa",
+        "date": _fmt_date(stage["date"]),
+        "updated": datetime.now().strftime("%H:%M"),
+        "sections": sections,
+    }
+
+
+CAT_SHORT = {
+    "Veterano de Guerra": "VET",
+    "Guerreiro": "GUE",
+    "Combatente": "COM",
+    "Geral": "GER",
+}
+
+
 def build_sections(conn, month_id):
     sections = []
+    # Pistola · Geral (junta as 3 categorias)
+    pistol_cats = [c for c in db.list_categories(conn, "pistola")]
+    pistol_cats = sorted(pistol_cats, key=lambda c: -c["rank"])
+    combined = st.monthly_table_combined(conn, month_id, "pistola", pistol_cats)
+    if combined["rows"]:
+        for r in combined["rows"]:
+            r["cat_short"] = CAT_SHORT.get(r.get("category", ""), "")
+        sections.append({
+            "id": "pistola-geral", "modality": "pistola",
+            "modality_label": "Pistola", "category": "Geral",
+            "combined": True, "table": combined,
+        })
+    # Categorias individuais (pistola do topo p/ base, depois carabina)
     for modality, cat_name in SECTION_ORDER:
         cat = conn.execute(
             "SELECT * FROM categories WHERE modality=? AND name=?",
@@ -61,6 +131,7 @@ def build_sections(conn, month_id):
             "modality": modality,
             "modality_label": "Pistola" if modality == "pistola" else "Carabina",
             "category": cat_name,
+            "combined": False,
             "table": table,
         })
     return sections
@@ -97,6 +168,9 @@ def register_web(app):
                 "label": f"{MONTH_PT[m['month']]} {m['year']}",
                 "selected": m["id"] == current["id"],
             } for m in months]
+            open_stage = db.get_open_stage(conn)
+            live_available = bool(
+                open_stage and db.stage_result_count(conn, open_stage["id"]) > 0)
         finally:
             conn.close()
         return templates.TemplateResponse(request, "index.html", {
@@ -107,8 +181,29 @@ def register_web(app):
             "stage_dates": stage_dates,
             "sections": sections,
             "month_options": month_options,
+            "live_available": live_available,
             "fmt_date": _fmt_date,
         })
+
+    @app.get("/agora", response_class=HTMLResponse)
+    async def agora(request: Request):
+        conn = db.get_conn()
+        try:
+            data = open_stage_payload(conn)
+        finally:
+            conn.close()
+        return templates.TemplateResponse(request, "live.html", {
+            "club": config.CLUB_NAME,
+            "data": data,
+        })
+
+    @app.get("/api/agora")
+    async def api_agora():
+        conn = db.get_conn()
+        try:
+            return open_stage_payload(conn)
+        finally:
+            conn.close()
 
     @app.get("/health")
     async def health():

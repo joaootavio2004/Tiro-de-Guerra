@@ -130,6 +130,9 @@ def main(xlsx_path: str):
             total_runs += 1
 
     conn.execute("UPDATE months SET status='aberto' WHERE id=?", (month_id,))
+    # etapas já realizadas entram encerradas; a "ao vivo" só aparece quando o
+    # admin abrir uma nova etapa durante o tiro.
+    conn.execute("UPDATE stages SET status='fechada' WHERE month_id=?", (month_id,))
     conn.commit()
 
     n_shooters = conn.execute("SELECT COUNT(*) c FROM shooters").fetchone()["c"]

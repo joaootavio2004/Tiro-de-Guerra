@@ -5,184 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ club }} — Resultados</title>
 <link rel="icon" type="image/png" href="/static/favicon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --ink:#0a130f; --surface:#10201a; --surface2:#152a20; --line:#22402f;
-    --gold:#cabe72; --gold-bright:#e2d588; --khaki:#9aa05f;
-    --text:#ece9da; --muted:#8a9a8d;
-    --gold-soft:rgba(202,190,114,.12);
-  }
-  *{box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  body{
-    margin:0; background:var(--ink); color:var(--text);
-    font-family:"Inter",system-ui,sans-serif; line-height:1.5;
-    -webkit-font-smoothing:antialiased;
-  }
-  a{color:inherit}
-  .wrap{max-width:1080px; margin:0 auto; padding:0 20px}
-
-  /* ---------- Top bar ---------- */
-  .topbar{
-    position:sticky; top:0; z-index:20;
-    background:rgba(10,19,15,.85); backdrop-filter:blur(10px);
-    border-bottom:1px solid var(--line);
-  }
-  .topbar .wrap{display:flex; align-items:center; gap:14px; height:64px}
-  .brand{display:flex; align-items:center; gap:12px; text-decoration:none}
-  .brand img{height:40px; width:auto; display:block}
-  .brand .name{
-    font-family:"Oswald",sans-serif; font-weight:700; letter-spacing:.14em;
-    text-transform:uppercase; font-size:15px; line-height:1; color:var(--text);
-  }
-  .brand .name small{display:block; color:var(--gold); font-size:9.5px;
-    letter-spacing:.34em; margin-top:3px}
-  .spacer{flex:1}
-  .month-select{position:relative}
-  .month-select select{
-    appearance:none; background:var(--surface2); color:var(--text);
-    border:1px solid var(--line); border-radius:999px;
-    font-family:"Oswald",sans-serif; font-weight:500; letter-spacing:.06em;
-    text-transform:uppercase; font-size:13px; padding:9px 38px 9px 16px; cursor:pointer;
-  }
-  .month-select::after{
-    content:""; position:absolute; right:15px; top:50%; width:7px; height:7px;
-    border-right:2px solid var(--gold); border-bottom:2px solid var(--gold);
-    transform:translateY(-65%) rotate(45deg); pointer-events:none;
-  }
-
-  /* ---------- Hero ---------- */
-  .hero{position:relative; overflow:hidden; border-bottom:1px solid var(--line)}
-  .hero .wrap{position:relative; padding:64px 20px 52px; z-index:2}
-  .reticle{
-    position:absolute; right:-90px; top:50%; transform:translateY(-50%);
-    width:460px; height:460px; opacity:.5; z-index:1; pointer-events:none;
-  }
-  .reticle .ring{fill:none; stroke:var(--line); stroke-width:2}
-  .reticle .tick{stroke:var(--khaki); stroke-width:2}
-  .reticle .dot{fill:var(--gold); opacity:.5}
-  .eyebrow{
-    display:inline-flex; align-items:center; gap:9px;
-    font-family:"Oswald",sans-serif; text-transform:uppercase;
-    letter-spacing:.32em; font-size:12px; color:var(--gold); margin-bottom:14px;
-  }
-  .eyebrow .cross{width:14px; height:14px; display:inline-block}
-  h1{
-    font-family:"Oswald",sans-serif; font-weight:700; text-transform:uppercase;
-    font-size:clamp(44px,9vw,86px); line-height:.92; letter-spacing:.01em;
-    margin:0; color:var(--text);
-  }
-  h1 .yr{color:var(--gold)}
-  .hero-sub{margin-top:18px; color:var(--muted); font-size:15px; max-width:46ch}
-  .badge-open{
-    display:inline-block; margin-left:10px; vertical-align:middle;
-    font-family:"Oswald",sans-serif; font-size:11px; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--ink); background:var(--gold);
-    border-radius:999px; padding:3px 11px; font-weight:600;
-  }
-
-  /* ---------- Tabs ---------- */
-  .tabs{display:flex; flex-wrap:wrap; gap:8px; padding:26px 0 6px}
-  .tab{
-    font-family:"Oswald",sans-serif; font-weight:500; text-transform:uppercase;
-    letter-spacing:.08em; font-size:13px; color:var(--muted);
-    background:var(--surface); border:1px solid var(--line);
-    border-radius:999px; padding:9px 16px; cursor:pointer; transition:.15s;
-    white-space:nowrap;
-  }
-  .tab .mod{color:var(--khaki); font-size:10.5px; letter-spacing:.14em}
-  .tab:hover{color:var(--text); border-color:var(--khaki)}
-  .tab.active{background:var(--gold); color:var(--ink); border-color:var(--gold)}
-  .tab.active .mod{color:rgba(10,19,15,.6)}
-
-  /* ---------- Standings card ---------- */
-  .panel{display:none; padding:14px 0 40px}
-  .panel.active{display:block; animation:fade .25s ease}
-  @keyframes fade{from{opacity:0; transform:translateY(6px)}to{opacity:1}}
-  .card{
-    background:linear-gradient(180deg,var(--surface) 0%, #0e1c16 100%);
-    border:1px solid var(--line); border-radius:16px; overflow:hidden;
-  }
-  .card-head{
-    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
-    padding:20px 22px 16px; border-bottom:1px solid var(--line);
-  }
-  .card-head .mod{
-    font-family:"Oswald",sans-serif; letter-spacing:.28em; text-transform:uppercase;
-    font-size:11px; color:var(--gold);
-  }
-  .card-head h2{
-    font-family:"Oswald",sans-serif; font-weight:600; text-transform:uppercase;
-    letter-spacing:.04em; font-size:24px; margin:0; color:var(--text);
-  }
-  .card-head .rule{margin-left:auto; color:var(--muted); font-size:12.5px}
-
-  .tbl-scroll{overflow-x:auto}
-  table{width:100%; border-collapse:collapse; min-width:480px}
-  thead th{
-    font-family:"Oswald",sans-serif; font-weight:500; text-transform:uppercase;
-    letter-spacing:.08em; font-size:11px; color:var(--muted);
-    padding:13px 14px; text-align:center; border-bottom:1px solid var(--line);
-    white-space:nowrap; background:#0f1e17;
-  }
-  thead th.pos{width:48px}
-  thead th.ath{text-align:left}
-  thead th .et-date{display:block; color:var(--khaki); font-size:9.5px;
-    letter-spacing:.06em; margin-top:2px}
-  thead th.tot{color:var(--gold)}
-  tbody td{padding:12px 14px; text-align:center; border-bottom:1px solid rgba(34,64,47,.5);
-    font-variant-numeric:tabular-nums; font-size:14px}
-  tbody tr:last-child td{border-bottom:none}
-  tbody tr:hover{background:rgba(202,190,114,.04)}
-  td.ath{text-align:left; font-weight:500; letter-spacing:.01em; white-space:nowrap}
-  td.tot{font-family:"Oswald",sans-serif; font-weight:600; font-size:16px;
-    color:var(--gold-bright)}
-  td.cell-dropped{color:var(--muted); text-decoration:line-through; opacity:.55}
-  td.cell-absent{color:#43564a}
-
-  /* colunas congeladas (Atirador à esquerda, Total à direita) */
-  th.pos, td.pos{position:sticky; left:0; z-index:2; background:#0e1b15}
-  th.ath, td.ath{position:sticky; left:48px; z-index:2; background:#0e1b15}
-  th.tot, td.tot{position:sticky; right:0; z-index:2; background:#0e1b15;
-    box-shadow:inset 1px 0 0 var(--line)}
-  thead th.pos, thead th.ath, thead th.tot{z-index:3}
-
-  .pos-badge{
-    display:inline-flex; align-items:center; justify-content:center;
-    width:30px; height:30px; border-radius:50%;
-    font-family:"Oswald",sans-serif; font-weight:600; font-size:14px;
-    background:var(--surface2); color:var(--muted); border:1px solid var(--line);
-  }
-  tr.top1 .pos-badge{background:var(--gold); color:var(--ink); border-color:var(--gold);
-    box-shadow:0 0 0 3px var(--gold-soft)}
-  tr.top2 .pos-badge{background:#c7ccd1; color:var(--ink); border-color:#c7ccd1}
-  tr.top3 .pos-badge{background:#bd8a5a; color:var(--ink); border-color:#bd8a5a}
-  tr.top1 td.ath{color:var(--gold-bright); font-weight:600}
-
-  .empty{padding:60px 20px; text-align:center; color:var(--muted)}
-
-  /* ---------- Footer ---------- */
-  footer{border-top:1px solid var(--line); margin-top:10px}
-  footer .wrap{padding:30px 20px; display:flex; align-items:center; gap:14px;
-    color:var(--muted); font-size:13px; flex-wrap:wrap}
-  footer img{height:30px; opacity:.85}
-  footer .legend{margin-left:auto; display:flex; gap:18px; flex-wrap:wrap}
-  footer .legend span{display:inline-flex; align-items:center; gap:7px}
-  .swatch{width:11px; height:11px; border-radius:3px; display:inline-block}
-
-  @media (max-width:560px){
-    .brand .name{font-size:13px}
-    .hero .wrap{padding:46px 20px 40px}
-    .reticle{width:320px; right:-120px; opacity:.35}
-    .card-head .rule{margin-left:0; flex-basis:100%}
-  }
-  @media (prefers-reduced-motion:reduce){
-    *{animation:none !important; scroll-behavior:auto !important}
-  }
-</style>
+{% include "_head.html" %}
 </head>
 <body>
 
@@ -232,6 +55,13 @@
         Ainda não há etapas com resultado neste mês.
       {% endif %}
     </p>
+    {% if live_available %}
+    <a class="live-banner" href="/agora">
+      <span class="live-dot"></span>
+      <span class="txt"><b>Etapa ao vivo</b><span>Acompanhe os tempos sendo lançados agora</span></span>
+      <span class="go">›</span>
+    </a>
+    {% endif %}
   </div>
 </section>
 
@@ -253,7 +83,13 @@
           <div class="mod">{{ s.modality_label }}</div>
           <h2>{{ s.category }}</h2>
         </div>
-        <div class="rule">Conta {{ s.table.best_n }} de {{ s.table.stages|length }} etapa{{ 's' if s.table.stages|length != 1 }} (descarta a pior)</div>
+        <div class="rule">
+          {% if s.table.stages|length <= 1 %}
+            {{ s.table.stages|length }} etapa realizada
+          {% else %}
+            Conta {{ s.table.best_n }} de {{ s.table.stages|length }} etapas (descarta a pior)
+          {% endif %}
+        </div>
       </div>
       <div class="tbl-scroll">
         <table>
@@ -269,16 +105,17 @@
           </thead>
           <tbody>
             {% for r in s.table.rows %}
-            <tr class="{% if r.pos<=3 %}top{{ r.pos }}{% endif %}">
+            <tr class="{% if r.pos<=3 %}top{{ r.pos }}{% endif %}{% if s.combined %} cat-{{ r.cat_short }}{% endif %}">
               <td class="pos"><span class="pos-badge">{{ r.pos }}</span></td>
-              <td class="ath">{{ r.name }}</td>
+              <td class="ath">{{ r.name }}{% if s.combined %}<br><span class="cat-badge" title="{{ r.category }}">{{ r.cat_short }}</span>{% endif %}</td>
               {% for c in r.cells %}
                 {% if not c.present %}
                   <td class="cell-absent">—</td>
-                {% elif c.dropped %}
-                  <td class="cell-dropped">{{ '%.2f'|format(c.points) }}</td>
                 {% else %}
-                  <td>{{ '%.2f'|format(c.points) }}</td>
+                  <td class="{% if c.dropped %}cell-dropped{% endif %}">
+                    <span class="cpts">{{ '%.2f'|format(c.points) }}</span>
+                    <span class="ctime">{{ c.time }}s</span>
+                  </td>
                 {% endif %}
               {% endfor %}
               <td class="tot">{{ '%.2f'|format(r.total) }}</td>
@@ -295,17 +132,7 @@
   {% endif %}
 </main>
 
-<footer>
-  <div class="wrap">
-    <img src="/static/logo.png" alt="">
-    <span>{{ club }} · IDSC</span>
-    <span class="legend">
-      <span><i class="swatch" style="background:#cabe72"></i>1º lugar</span>
-      <span><i class="swatch" style="background:#c7ccd1"></i>2º</span>
-      <span><i class="swatch" style="background:#bd8a5a"></i>3º</span>
-    </span>
-  </div>
-</footer>
+{% include "_footer.html" %}
 
 <script>
   document.querySelectorAll('.tab').forEach(function(tab){

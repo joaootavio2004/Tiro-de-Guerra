@@ -1,0 +1,240 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0a130f; --surface:#10201a; --surface2:#152a20; --line:#22402f;
+    --gold:#cabe72; --gold-bright:#e2d588; --khaki:#9aa05f;
+    --text:#ece9da; --muted:#8a9a8d;
+    --gold-soft:rgba(202,190,114,.12);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--ink); color:var(--text);
+    font-family:"Inter",system-ui,sans-serif; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 20px}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:rgba(10,19,15,.85); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar .wrap{display:flex; align-items:center; gap:14px; height:64px}
+  .brand{display:flex; align-items:center; gap:12px; text-decoration:none}
+  .brand img{height:40px; width:auto; display:block}
+  .brand .name{
+    font-family:"Oswald",sans-serif; font-weight:700; letter-spacing:.14em;
+    text-transform:uppercase; font-size:15px; line-height:1; color:var(--text);
+  }
+  .brand .name small{display:block; color:var(--gold); font-size:9.5px;
+    letter-spacing:.34em; margin-top:3px}
+  .spacer{flex:1}
+  .month-select{position:relative}
+  .month-select select{
+    appearance:none; background:var(--surface2); color:var(--text);
+    border:1px solid var(--line); border-radius:999px;
+    font-family:"Oswald",sans-serif; font-weight:500; letter-spacing:.06em;
+    text-transform:uppercase; font-size:13px; padding:9px 38px 9px 16px; cursor:pointer;
+  }
+  .month-select::after{
+    content:""; position:absolute; right:15px; top:50%; width:7px; height:7px;
+    border-right:2px solid var(--gold); border-bottom:2px solid var(--gold);
+    transform:translateY(-65%) rotate(45deg); pointer-events:none;
+  }
+
+  /* ---------- Hero ---------- */
+  .hero{position:relative; overflow:hidden; border-bottom:1px solid var(--line)}
+  .hero .wrap{position:relative; padding:64px 20px 52px; z-index:2}
+  .reticle{
+    position:absolute; right:-90px; top:50%; transform:translateY(-50%);
+    width:460px; height:460px; opacity:.5; z-index:1; pointer-events:none;
+  }
+  .reticle .ring{fill:none; stroke:var(--line); stroke-width:2}
+  .reticle .tick{stroke:var(--khaki); stroke-width:2}
+  .reticle .dot{fill:var(--gold); opacity:.5}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:9px;
+    font-family:"Oswald",sans-serif; text-transform:uppercase;
+    letter-spacing:.32em; font-size:12px; color:var(--gold); margin-bottom:14px;
+  }
+  .eyebrow .cross{width:14px; height:14px; display:inline-block}
+  h1{
+    font-family:"Oswald",sans-serif; font-weight:700; text-transform:uppercase;
+    font-size:clamp(44px,9vw,86px); line-height:.92; letter-spacing:.01em;
+    margin:0; color:var(--text);
+  }
+  h1 .yr{color:var(--gold)}
+  .hero-sub{margin-top:18px; color:var(--muted); font-size:15px; max-width:46ch}
+  .badge-open{
+    display:inline-block; margin-left:10px; vertical-align:middle;
+    font-family:"Oswald",sans-serif; font-size:11px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink); background:var(--gold);
+    border-radius:999px; padding:3px 11px; font-weight:600;
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabs{display:flex; flex-wrap:wrap; gap:8px; padding:26px 0 6px}
+  .tab{
+    font-family:"Oswald",sans-serif; font-weight:500; text-transform:uppercase;
+    letter-spacing:.08em; font-size:13px; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; padding:9px 16px; cursor:pointer; transition:.15s;
+    white-space:nowrap;
+  }
+  .tab .mod{color:var(--khaki); font-size:10.5px; letter-spacing:.14em}
+  .tab:hover{color:var(--text); border-color:var(--khaki)}
+  .tab.active{background:var(--gold); color:var(--ink); border-color:var(--gold)}
+  .tab.active .mod{color:rgba(10,19,15,.6)}
+
+  /* ---------- Standings card ---------- */
+  .panel{display:none; padding:14px 0 40px}
+  .panel.active{display:block; animation:fade .25s ease}
+  @keyframes fade{from{opacity:0; transform:translateY(6px)}to{opacity:1}}
+  .card{
+    background:linear-gradient(180deg,var(--surface) 0%, #0e1c16 100%);
+    border:1px solid var(--line); border-radius:16px; overflow:hidden;
+  }
+  .card-head{
+    display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;
+    padding:20px 22px 16px; border-bottom:1px solid var(--line);
+  }
+  .card-head .mod{
+    font-family:"Oswald",sans-serif; letter-spacing:.28em; text-transform:uppercase;
+    font-size:11px; color:var(--gold);
+  }
+  .card-head h2{
+    font-family:"Oswald",sans-serif; font-weight:600; text-transform:uppercase;
+    letter-spacing:.04em; font-size:24px; margin:0; color:var(--text);
+  }
+  .card-head .rule{margin-left:auto; color:var(--muted); font-size:12.5px}
+
+  .tbl-scroll{overflow-x:auto}
+  table{width:100%; border-collapse:collapse; min-width:480px}
+  thead th{
+    font-family:"Oswald",sans-serif; font-weight:500; text-transform:uppercase;
+    letter-spacing:.08em; font-size:11px; color:var(--muted);
+    padding:13px 14px; text-align:center; border-bottom:1px solid var(--line);
+    white-space:nowrap; background:#0f1e17;
+  }
+  thead th.pos{width:48px}
+  thead th.ath{text-align:left}
+  thead th .et-date{display:block; color:var(--khaki); font-size:9.5px;
+    letter-spacing:.06em; margin-top:2px}
+  thead th.tot{color:var(--gold)}
+  tbody td{padding:12px 14px; text-align:center; border-bottom:1px solid rgba(34,64,47,.5);
+    font-variant-numeric:tabular-nums; font-size:14px}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:rgba(202,190,114,.04)}
+  td.ath{text-align:left; font-weight:500; letter-spacing:.01em; white-space:nowrap}
+  td.tot{font-family:"Oswald",sans-serif; font-weight:600; font-size:16px;
+    color:var(--gold-bright)}
+  td.cell-dropped{color:var(--muted); text-decoration:line-through; opacity:.55}
+  td.cell-absent{color:#43564a}
+  .cpts{display:block; font-variant-numeric:tabular-nums}
+  .ctime{display:block; font-size:10.5px; color:var(--khaki); margin-top:2px;
+    font-variant-numeric:tabular-nums; letter-spacing:.02em}
+  td.cell-dropped .ctime{color:var(--muted)}
+  th.cat, td.cat{width:46px}
+  .cat-badge{display:inline-block; font-family:"Oswald",sans-serif; font-weight:600;
+    font-size:10px; letter-spacing:.06em; padding:2px 7px; border-radius:6px;
+    background:var(--surface2); border:1px solid var(--line); color:var(--khaki);
+    margin-top:4px}
+  .cat-VET .cat-badge{color:#e2d588; border-color:rgba(202,190,114,.4)}
+  .cat-GUE .cat-badge{color:#c7ccd1; border-color:rgba(199,204,209,.35)}
+  .cat-COM .cat-badge{color:#cba07a; border-color:rgba(189,138,90,.4)}
+
+  /* colunas congeladas (Atirador à esquerda, Total à direita) */
+  th.pos, td.pos{position:sticky; left:0; z-index:2; background:#0e1b15}
+  th.ath, td.ath{position:sticky; left:48px; z-index:2; background:#0e1b15}
+  th.tot, td.tot{position:sticky; right:0; z-index:2; background:#0e1b15;
+    box-shadow:inset 1px 0 0 var(--line)}
+  thead th.pos, thead th.ath, thead th.tot{z-index:3}
+
+  .pos-badge{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:30px; height:30px; border-radius:50%;
+    font-family:"Oswald",sans-serif; font-weight:600; font-size:14px;
+    background:var(--surface2); color:var(--muted); border:1px solid var(--line);
+  }
+  tr.top1 .pos-badge{background:var(--gold); color:var(--ink); border-color:var(--gold);
+    box-shadow:0 0 0 3px var(--gold-soft)}
+  tr.top2 .pos-badge{background:#c7ccd1; color:var(--ink); border-color:#c7ccd1}
+  tr.top3 .pos-badge{background:#bd8a5a; color:var(--ink); border-color:#bd8a5a}
+  tr.top1 td.ath{color:var(--gold-bright); font-weight:600}
+
+  .empty{padding:60px 20px; text-align:center; color:var(--muted)}
+
+  /* ---------- Footer ---------- */
+  footer{border-top:1px solid var(--line); margin-top:10px}
+  footer .wrap{padding:30px 20px; display:flex; align-items:center; gap:14px;
+    color:var(--muted); font-size:13px; flex-wrap:wrap}
+  footer img{height:30px; opacity:.85}
+  footer .legend{margin-left:auto; display:flex; gap:18px; flex-wrap:wrap}
+  footer .legend span{display:inline-flex; align-items:center; gap:7px}
+  .swatch{width:11px; height:11px; border-radius:3px; display:inline-block}
+
+  @media (max-width:560px){
+    .brand .name{font-size:13px}
+    .hero .wrap{padding:46px 20px 40px}
+    .reticle{width:320px; right:-120px; opacity:.35}
+    .card-head .rule{margin-left:0; flex-basis:100%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important; scroll-behavior:auto !important}
+  }
+
+  /* ---------- Página AO VIVO ---------- */
+  .live-pill{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:"Oswald",sans-serif; text-transform:uppercase; letter-spacing:.18em;
+    font-size:12px; color:#ff6b5e; border:1px solid rgba(255,107,94,.4);
+    background:rgba(255,107,94,.08); border-radius:999px; padding:7px 14px;
+    text-decoration:none;
+  }
+  .live-dot{width:9px; height:9px; border-radius:50%; background:#ff6b5e;
+    box-shadow:0 0 0 0 rgba(255,107,94,.6); animation:pulse 1.8s infinite}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(255,107,94,.55)}
+    70%{box-shadow:0 0 0 9px rgba(255,107,94,0)}
+    100%{box-shadow:0 0 0 0 rgba(255,107,94,0)}
+  }
+  .live-banner{
+    display:flex; align-items:center; gap:14px; margin:22px 0 0;
+    padding:16px 20px; border:1px solid rgba(255,107,94,.35);
+    background:linear-gradient(180deg,rgba(255,107,94,.10),rgba(255,107,94,.03));
+    border-radius:14px; text-decoration:none; color:var(--text); transition:.15s;
+  }
+  .live-banner:hover{border-color:rgba(255,107,94,.7)}
+  .live-banner .txt b{font-family:"Oswald",sans-serif; letter-spacing:.04em;
+    text-transform:uppercase; display:block; font-size:16px}
+  .live-banner .txt span{color:var(--muted); font-size:13px}
+  .live-banner .go{margin-left:auto; color:#ff6b5e; font-size:22px}
+
+  .time-cell{font-family:"Oswald",sans-serif; font-weight:600; font-size:18px;
+    color:var(--text); font-variant-numeric:tabular-nums}
+  tr.top1 .time-cell{color:var(--gold-bright)}
+  .pts-cell{color:var(--muted); font-size:13px; font-variant-numeric:tabular-nums}
+  .pending{padding:14px 22px 20px; color:var(--muted); font-size:13px;
+    border-top:1px solid var(--line)}
+  .pending b{font-family:"Oswald",sans-serif; text-transform:uppercase;
+    letter-spacing:.1em; font-size:11px; color:var(--khaki); display:block; margin-bottom:6px}
+  .pending .chip{display:inline-block; background:var(--surface2);
+    border:1px solid var(--line); border-radius:999px; padding:4px 11px;
+    margin:0 6px 6px 0; font-size:12.5px; color:var(--text)}
+  .pending .chip.dq{color:#ff6b5e; border-color:rgba(255,107,94,.35)}
+  .updated{color:var(--muted); font-size:12px; margin-top:8px}
+  .updated .live-dot{display:inline-block; vertical-align:middle; margin-right:6px}
+
+  /* tabela ao vivo: cabe na tela (sem rolagem), nome longo trunca */
+  table.live-tbl{min-width:0; width:100%; table-layout:auto}
+  .live-tbl th.ath, .live-tbl td.ath{
+    max-width:0; width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .live-tbl th, .live-tbl td{padding-left:9px; padding-right:9px; white-space:nowrap}
+  .live-tbl th.ath, .live-tbl td.ath{padding-left:12px}
+  .live-tbl th:last-child, .live-tbl td:last-child{padding-right:16px}
+</style>

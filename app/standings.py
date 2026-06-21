@@ -44,23 +44,28 @@ def month_stage_ids(conn, month_id: int) -> List[int]:
     return [s["id"] for s in db.list_stages(conn, month_id)]
 
 
-def count_held_stages(conn, month_id: int, modality: str) -> int:
-    """Quantas etapas do mês têm pelo menos um resultado nesta modalidade."""
-    stage_ids = month_stage_ids(conn, month_id)
-    n = 0
-    for sid in stage_ids:
+def month_held_stages(conn, month_id: int):
+    """Etapas do mês que já foram realizadas (têm ao menos um resultado, em
+    qualquer modalidade), em ordem. É o 'número de etapas do mês'."""
+    held = []
+    for s in db.list_stages(conn, month_id):
         r = conn.execute(
             "SELECT COUNT(*) AS c FROM runs ru "
-            "JOIN enrollments e ON e.id=ru.enrollment_id "
-            "WHERE e.stage_id=? AND e.modality=?", (sid, modality)).fetchone()
+            "JOIN enrollments e ON e.id=ru.enrollment_id WHERE e.stage_id=?",
+            (s["id"],)).fetchone()
         if r["c"] > 0:
-            n += 1
-    return n
+            held.append(s)
+    return held
 
 
-def monthly_best_n(conn, month_id: int, modality: str) -> int:
-    """Quantas etapas contam no mês: todas menos a pior (mínimo 1)."""
-    held = count_held_stages(conn, month_id, modality)
+def count_held_stages(conn, month_id: int, modality: str = None) -> int:
+    return len(month_held_stages(conn, month_id))
+
+
+def monthly_best_n(conn, month_id: int, modality: str = None) -> int:
+    """Quantas etapas contam no mês: todas as realizadas menos a pior (mín. 1).
+    Vale igual para pistola e carabina."""
+    held = len(month_held_stages(conn, month_id))
     return max(1, held - 1)
 
 
@@ -72,7 +77,7 @@ def monthly_classification(conn, month_id: int, modality: str,
     Ex.: 4 etapas -> contam 3; 5 etapas -> contam 4; 3 etapas -> contam 2.
     """
     if best_n is None:
-        best_n = monthly_best_n(conn, month_id, modality)
+        best_n = monthly_best_n(conn, month_id)
     stage_ids = month_stage_ids(conn, month_id)
     # pontos por etapa por atirador
     per_shooter: Dict[int, List[float]] = {}
@@ -155,19 +160,21 @@ def _modality_has_results(conn, stage_id: int, modality: str) -> bool:
 
 def monthly_table(conn, month_id: int, modality: str, category_id: int) -> Dict[str, Any]:
     """
-    Tabela no formato planilha para o site: colunas por etapa + total.
-    Marca a(s) pior(es) etapa(s) descartada(s) de cada atirador.
+    Tabela no formato planilha para o site: TODAS as etapas do mês como colunas,
+    com tempo + pontos por etapa e o total descartando a pior. Vale igual para
+    pistola e carabina (carabina mostra '—' nas etapas em que não houve carabina).
     """
-    stages = [s for s in db.list_stages(conn, month_id)
-              if _modality_has_results(conn, s["id"], modality)]
-    best_n = monthly_best_n(conn, month_id, modality)
+    stages = month_held_stages(conn, month_id)
+    best_n = monthly_best_n(conn, month_id)
 
     stage_pts: Dict[int, Dict[int, float]] = {}
+    stage_time: Dict[int, Dict[int, float]] = {}
     enrolled_in: Dict[int, set] = {}
     for s in stages:
         times = stage_best_times(conn, s["id"], modality, category_id)
         stage_pts[s["id"]] = stage_points(times)
-        enrolled_in[s["id"]] = set(times.keys())
+        stage_time[s["id"]] = times
+        enrolled_in[s["id"]] = {sid for sid, t in times.items() if t is not None}
 
     shooters: set = set()
     for s in stages:
@@ -180,10 +187,13 @@ def monthly_table(conn, month_id: int, modality: str, category_id: int) -> Dict[
         for s in stages:
             if sid in enrolled_in[s["id"]]:
                 p = round(stage_pts[s["id"]][sid], 2)
-                cells.append({"points": p, "present": True, "dropped": False})
+                t = stage_time[s["id"]][sid]
+                cells.append({"points": p, "time": f"{t:.2f}",
+                              "present": True, "dropped": False})
                 pts_list.append(stage_pts[s["id"]][sid])
             else:
-                cells.append({"points": None, "present": False, "dropped": False})
+                cells.append({"points": None, "time": None,
+                              "present": False, "dropped": False})
         total = monthly_score(pts_list, best_n)
         n_drop = max(0, len(pts_list) - best_n)
         if n_drop > 0:
@@ -200,5 +210,28 @@ def monthly_table(conn, month_id: int, modality: str, category_id: int) -> Dict[
     return {
         "stages": [{"number": s["number"], "date": s["date"]} for s in stages],
         "rows": rows,
+        "best_n": best_n,
+    }
+
+
+def monthly_table_combined(conn, month_id: int, modality: str,
+                           categories) -> Dict[str, Any]:
+    """Junta várias categorias numa só tabela (ex.: Pistola Geral), mantendo o
+    rótulo da categoria de cada atirador. Colunas = etapas do mês."""
+    stages = month_held_stages(conn, month_id)
+    best_n = monthly_best_n(conn, month_id)
+    all_rows = []
+    for cat in categories:
+        t = monthly_table(conn, month_id, modality, cat["id"])
+        for r in t["rows"]:
+            r = dict(r)
+            r["category"] = cat["name"]
+            all_rows.append(r)
+    all_rows.sort(key=lambda r: -r["total"])
+    for i, r in enumerate(all_rows, 1):
+        r["pos"] = i
+    return {
+        "stages": [{"number": s["number"], "date": s["date"]} for s in stages],
+        "rows": all_rows,
         "best_n": best_n,
     }
