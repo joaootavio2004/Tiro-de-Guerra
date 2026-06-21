@@ -331,6 +331,48 @@ def close_stage(conn, stage_id: int) -> None:
     conn.execute("UPDATE stages SET status='fechada' WHERE id=?", (stage_id,))
 
 
+def reopen_stage(conn, stage_id: int) -> None:
+    conn.execute("UPDATE stages SET status='aberta' WHERE id=?", (stage_id,))
+
+
+def update_stage_date(conn, stage_id: int, the_date: str) -> None:
+    conn.execute("UPDATE stages SET date=? WHERE id=?", (the_date, stage_id))
+
+
+def stage_result_count(conn, stage_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM runs r JOIN enrollments e ON e.id=r.enrollment_id "
+        "WHERE e.stage_id=?", (stage_id,)).fetchone()
+    return row["n"]
+
+
+def stage_enroll_count(conn, stage_id: int) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM enrollments WHERE stage_id=?",
+        (stage_id,)).fetchone()
+    return row["n"]
+
+
+def delete_stage(conn, stage_id: int) -> None:
+    """Apaga a etapa e tudo ligado a ela (inscrições e resultados)."""
+    conn.execute(
+        "DELETE FROM runs WHERE enrollment_id IN "
+        "(SELECT id FROM enrollments WHERE stage_id=?)", (stage_id,))
+    conn.execute("DELETE FROM enrollments WHERE stage_id=?", (stage_id,))
+    conn.execute("DELETE FROM stages WHERE id=?", (stage_id,))
+
+
+def wipe_month(conn, month_id: int) -> None:
+    """Limpa TODAS as etapas/inscrições/resultados do mês (recomeçar do zero).
+    Mantém atiradores e suas categorias atuais."""
+    stage_ids = [s["id"] for s in
+                 conn.execute("SELECT id FROM stages WHERE month_id=?",
+                              (month_id,)).fetchall()]
+    for sid in stage_ids:
+        delete_stage(conn, sid)
+    conn.execute("DELETE FROM month_category WHERE month_id=?", (month_id,))
+
+
 # ----------------------------------------------------------------------------
 # SNAPSHOT DE CATEGORIA NO MÊS
 # ----------------------------------------------------------------------------
@@ -391,6 +433,25 @@ def list_enrollments(conn, stage_id: int, modality: str = None) -> List[sqlite3.
         args.append(modality)
     q += "ORDER BY e.modality, c.rank DESC, s.name"
     return conn.execute(q, args).fetchall()
+
+
+def get_enrollment_full(conn, enrollment_id: int):
+    return conn.execute(
+        "SELECT e.*, s.name AS shooter_name, c.name AS category_name "
+        "FROM enrollments e JOIN shooters s ON s.id=e.shooter_id "
+        "JOIN categories c ON c.id=e.category_id WHERE e.id=?",
+        (enrollment_id,)).fetchone()
+
+
+def set_enrollment_qty(conn, enrollment_id: int, qty: int) -> None:
+    conn.execute("UPDATE enrollments SET runs_total=? WHERE id=?",
+                 (max(1, qty), enrollment_id))
+
+
+def delete_enrollment(conn, enrollment_id: int) -> None:
+    """Remove a inscrição e os resultados ligados a ela."""
+    conn.execute("DELETE FROM runs WHERE enrollment_id=?", (enrollment_id,))
+    conn.execute("DELETE FROM enrollments WHERE id=?", (enrollment_id,))
 
 
 def add_run(conn, enrollment_id: int, raw_time: Optional[float], pen2: int,

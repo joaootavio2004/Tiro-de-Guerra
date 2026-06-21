@@ -186,6 +186,10 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await show_enrolled(update, context)
     if data.startswith("enrolled:mod:"):
         return await show_enrolled(update, context, data.split(":")[2])
+    if data == "enrolled:manage":
+        return await enroll_manage_list(update, context, role)
+    if data.startswith("enrmg:"):
+        return await enroll_manage_router(update, context, role)
 
     # ---- Resultado ----
     if data == "result":
@@ -226,6 +230,8 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await result_set_time(update, context, text)
     if awaiting == "cat_new_name":
         return await admin_cat_create(update, context, text)
+    if awaiting == "stage_date":
+        return await admin_stage_create_with_date(update, context, text)
 
 
 # ============================================================================
@@ -435,10 +441,112 @@ async def show_enrolled(update, context, modality=None):
     txt = texts.enrolled_list_text(label, data)
     rows = [[btn("🔫 Pistola", "enrolled:mod:pistola"),
              btn("🎯 Carabina", "enrolled:mod:carabina")],
-            [btn("🔄 Todas", "enrolled")],
-            [btn("🏠 Menu", "home")]]
+            [btn("🔄 Todas", "enrolled")]]
+    if can_enroll(role_of(update.effective_user.id)):
+        rows.append([btn("✏️ Editar inscrições", "enrolled:manage")])
+    rows.append([btn("🏠 Menu", "home")])
     await update.callback_query.edit_message_text(
         txt, reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+async def enroll_manage_list(update, context, role):
+    if not can_enroll(role):
+        return
+    conn = db.get_conn()
+    try:
+        stage = current_stage_or_none(conn)
+        if not stage:
+            await update.callback_query.edit_message_text(
+                "⚠️ Não há etapa aberta.",
+                reply_markup=kb([[btn("🏠 Menu", "home")]]))
+            return
+        enrolls = db.list_enrollments(conn, stage["id"])
+        rows = []
+        for e in enrolls:
+            mlabel = "🔫" if e["modality"] == "pistola" else "🎯"
+            rows.append([btn(f"{mlabel} {e['shooter_name']} ({e['runs_total']}x)",
+                             f"enrmg:pick:{e['id']}")])
+        label = stage_label(conn, stage)
+    finally:
+        conn.close()
+    if not rows:
+        return await update.callback_query.edit_message_text(
+            f"✏️ *{label}*\n\n_Nenhuma inscrição para editar._",
+            reply_markup=kb([[btn("⬅️ Voltar", "enrolled")]]),
+            parse_mode=ParseMode.MARKDOWN)
+    rows.append([btn("⬅️ Voltar", "enrolled")])
+    await update.callback_query.edit_message_text(
+        f"✏️ *Editar inscrições — {label}*\nToque no atirador:",
+        reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+async def enroll_manage_detail(update, context, eid):
+    conn = db.get_conn()
+    try:
+        e = db.get_enrollment_full(conn, eid)
+        if not e:
+            return await enroll_manage_list(update, context,
+                                            role_of(update.effective_user.id))
+        rcount = db.runs_count(conn, eid)
+    finally:
+        conn.close()
+    txt = (f"✏️ *{e['shooter_name']}*\n"
+           f"{texts.modality_label(e['modality'])} · {e['category_name']}\n\n"
+           f"Inscrições (corridas): *{e['runs_total']}*\n"
+           f"Resultados lançados: {rcount}\n\n"
+           "Defina a quantidade ou exclua:")
+    qty_buttons = [btn(("✅ " if n == e["runs_total"] else "") + str(n),
+                       f"enrmg:qty:{eid}:{n}") for n in range(1, 7)]
+    rows = [qty_buttons[:3], qty_buttons[3:],
+            [btn("🗑️ Excluir inscrição", f"enrmg:del:{eid}")],
+            [btn("⬅️ Voltar", "enrolled:manage")]]
+    await update.callback_query.edit_message_text(
+        txt, reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+async def enroll_manage_router(update, context, role):
+    if not can_enroll(role):
+        return
+    parts = update.callback_query.data.split(":")
+    action = parts[1]
+    eid = int(parts[2])
+    if action == "pick":
+        return await enroll_manage_detail(update, context, eid)
+    if action == "qty":
+        n = int(parts[3])
+        conn = db.get_conn()
+        try:
+            db.set_enrollment_qty(conn, eid, n)
+            conn.commit()
+        finally:
+            conn.close()
+        await update.callback_query.answer(f"Quantidade ajustada para {n}.")
+        return await enroll_manage_detail(update, context, eid)
+    if action == "del":
+        conn = db.get_conn()
+        try:
+            e = db.get_enrollment_full(conn, eid)
+            rcount = db.runs_count(conn, eid)
+        finally:
+            conn.close()
+        aviso = (f"⚠️ *Excluir a inscrição de {e['shooter_name']}?*\n\n"
+                 + (f"Isso também apaga *{rcount} resultado(s)* já lançado(s). "
+                    if rcount else "")
+                 + "Esta ação não pode ser desfeita.")
+        return await update.callback_query.edit_message_text(
+            aviso, reply_markup=kb([
+                [btn("🗑️ Sim, excluir", f"enrmg:delok:{eid}")],
+                [btn("⬅️ Cancelar", f"enrmg:pick:{eid}")],
+            ]), parse_mode=ParseMode.MARKDOWN)
+    if action == "delok":
+        conn = db.get_conn()
+        try:
+            db.delete_enrollment(conn, eid)
+            conn.commit()
+        finally:
+            conn.close()
+        await update.callback_query.answer("Inscrição excluída.")
+        return await enroll_manage_list(update, context, role)
 
 
 # ============================================================================
@@ -704,10 +812,22 @@ async def admin_router(update, context, role):
                              [btn("⬅️ Voltar", "adm:cats")]]))
     if sub == "stages":
         return await admin_stages(update, context)
+    if sub == "stage":
+        return await admin_stage_detail(update, context, int(parts[2]))
     if sub == "stagenew":
         return await admin_stage_new(update, context)
     if sub == "stageclose":
         return await admin_stage_close(update, context, int(parts[2]))
+    if sub == "stageopen":
+        return await admin_stage_reopen(update, context, int(parts[2]))
+    if sub == "stagedel":
+        return await admin_stage_delete_confirm(update, context, int(parts[2]))
+    if sub == "stagedelok":
+        return await admin_stage_delete(update, context, int(parts[2]))
+    if sub == "monthwipe":
+        return await admin_month_wipe_confirm(update, context)
+    if sub == "monthwipeok":
+        return await admin_month_wipe(update, context)
     if sub == "monthclose":
         return await admin_month_close(update, context)
     if sub == "monthconfirm":
@@ -831,37 +951,82 @@ async def admin_stages(update, context):
         month = db.get_open_month(conn)
         stages = db.list_stages(conn, month["id"])
         mlabel = f"{MONTH_PT[month['month']]}/{month['year']}"
-        lines = [f"📅 *Mês aberto: {mlabel}*\n"]
+        lines = [f"📅 *Etapas de {mlabel}* _(mês aberto)_\n"]
         rows = []
         for s in stages:
-            status = "🟢 aberta" if s["status"] == "aberta" else "🔒 fechada"
-            lines.append(f"• {s['number']}ª Etapa ({s['date']}) — {status}")
-            if s["status"] == "aberta":
-                rows.append([btn(f"🔒 Encerrar {s['number']}ª etapa",
-                                 f"adm:stageclose:{s['id']}")])
+            status = "🟢" if s["status"] == "aberta" else "🔒"
+            rcount = db.stage_result_count(conn, s["id"])
+            lines.append(f"{status} {s['number']}ª Etapa · {texts.fmt_date(s['date'])}"
+                         f" · {rcount} result.")
+            rows.append([btn(f"{status} {s['number']}ª Etapa · "
+                             f"{texts.fmt_date(s['date'])}",
+                             f"adm:stage:{s['id']}")])
         if not stages:
-            lines.append("_Nenhuma etapa ainda._")
+            lines.append("_Nenhuma etapa ainda. Toque em ➕ para abrir a 1ª._")
     finally:
         conn.close()
     rows.append([btn("➕ Abrir nova etapa", "adm:stagenew:x")])
     rows.append([btn("🏁 Fechar mês (subidas/descidas)", "adm:monthclose:x")])
+    if stages:
+        rows.append([btn("🧹 Limpar mês (apagar todas)", "adm:monthwipe:x")])
     rows.append([btn("⬅️ Voltar", "admin")])
+    await _send_or_edit(update, context, False, "\n".join(lines), kb(rows))
+
+
+async def admin_stage_detail(update, context, stage_id):
+    conn = db.get_conn()
+    try:
+        s = db.get_stage(conn, stage_id)
+        if not s:
+            return await admin_stages(update, context)
+        label = stage_label(conn, s)
+        rcount = db.stage_result_count(conn, stage_id)
+        ecount = db.stage_enroll_count(conn, stage_id)
+        status = "🟢 aberta" if s["status"] == "aberta" else "🔒 fechada"
+    finally:
+        conn.close()
+    txt = (f"📅 *{label}*\n\n"
+           f"Data: {texts.fmt_date(s['date'])}\n"
+           f"Situação: {status}\n"
+           f"Inscritos: {ecount} · Resultados: {rcount}")
+    toggle = ([btn("🔒 Encerrar etapa", f"adm:stageclose:{stage_id}")]
+              if s["status"] == "aberta"
+              else [btn("🔓 Reabrir etapa", f"adm:stageopen:{stage_id}")])
+    rows = [toggle,
+            [btn("🗑️ Excluir etapa", f"adm:stagedel:{stage_id}")],
+            [btn("⬅️ Voltar", "adm:stages")]]
     await update.callback_query.edit_message_text(
-        "\n".join(lines), reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
+        txt, reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
 
 
 async def admin_stage_new(update, context):
+    context.user_data["await"] = "stage_date"
+    await update.callback_query.edit_message_text(
+        "➕ *Nova etapa*\n\nDigite a *data* da etapa (ex.: `21/06/2026`).\n"
+        "Você também pode escrever `hoje`.",
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def admin_stage_create_with_date(update, context, text):
+    iso = texts.parse_date(text)
+    if not iso:
+        await update.message.reply_text(
+            "Data inválida. Use o formato `DD/MM/AAAA` (ex.: `21/06/2026`) ou `hoje`.",
+            parse_mode=ParseMode.MARKDOWN)
+        return
     conn = db.get_conn()
     try:
         month = db.ensure_current_month(conn)
         conn.commit()
-        stage = db.create_stage(conn, month["id"])
+        stage = db.create_stage(conn, month["id"], iso)
         conn.commit()
         label = stage_label(conn, stage)
     finally:
         conn.close()
-    await update.callback_query.edit_message_text(
-        f"✅ Nova etapa aberta: *{label}*.\nJá pode receber inscrições.",
+    context.user_data.pop("await", None)
+    await update.message.reply_text(
+        f"✅ Nova etapa aberta: *{label}* ({texts.fmt_date(iso)}).\n"
+        "Já pode receber inscrições.",
         reply_markup=kb([[btn("📅 Etapas/Mês", "adm:stages")],
                          [btn("🏠 Menu", "home")]]),
         parse_mode=ParseMode.MARKDOWN)
@@ -874,6 +1039,75 @@ async def admin_stage_close(update, context, stage_id):
         conn.commit()
     finally:
         conn.close()
+    await admin_stage_detail(update, context, stage_id)
+
+
+async def admin_stage_reopen(update, context, stage_id):
+    conn = db.get_conn()
+    try:
+        db.reopen_stage(conn, stage_id)
+        conn.commit()
+    finally:
+        conn.close()
+    await admin_stage_detail(update, context, stage_id)
+
+
+async def admin_stage_delete_confirm(update, context, stage_id):
+    conn = db.get_conn()
+    try:
+        s = db.get_stage(conn, stage_id)
+        label = stage_label(conn, s)
+        rcount = db.stage_result_count(conn, stage_id)
+    finally:
+        conn.close()
+    aviso = (f"⚠️ *Excluir {label}?*\n\n"
+             f"Isso apaga a etapa e seus *{rcount} resultado(s)* lançados. "
+             "Esta ação não pode ser desfeita.")
+    await update.callback_query.edit_message_text(
+        aviso, reply_markup=kb([
+            [btn("🗑️ Sim, excluir", f"adm:stagedelok:{stage_id}")],
+            [btn("⬅️ Cancelar", f"adm:stage:{stage_id}")],
+        ]), parse_mode=ParseMode.MARKDOWN)
+
+
+async def admin_stage_delete(update, context, stage_id):
+    conn = db.get_conn()
+    try:
+        db.delete_stage(conn, stage_id)
+        conn.commit()
+    finally:
+        conn.close()
+    await update.callback_query.answer("Etapa excluída.")
+    await admin_stages(update, context)
+
+
+async def admin_month_wipe_confirm(update, context):
+    conn = db.get_conn()
+    try:
+        month = db.get_open_month(conn)
+        mlabel = f"{MONTH_PT[month['month']]}/{month['year']}"
+        n = len(db.list_stages(conn, month["id"]))
+    finally:
+        conn.close()
+    await update.callback_query.edit_message_text(
+        f"⚠️ *Limpar todo o mês de {mlabel}?*\n\n"
+        f"Isso apaga as *{n} etapas* do mês com todas as inscrições e resultados, "
+        "deixando o mês em branco para recomeçar. Os atiradores e suas categorias "
+        "são mantidos. Esta ação não pode ser desfeita.",
+        reply_markup=kb([[btn("🧹 Sim, limpar o mês", "adm:monthwipeok:x")],
+                         [btn("⬅️ Cancelar", "adm:stages")]]),
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def admin_month_wipe(update, context):
+    conn = db.get_conn()
+    try:
+        month = db.get_open_month(conn)
+        db.wipe_month(conn, month["id"])
+        conn.commit()
+    finally:
+        conn.close()
+    await update.callback_query.answer("Mês limpo.")
     await admin_stages(update, context)
 
 

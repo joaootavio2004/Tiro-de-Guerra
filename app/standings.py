@@ -44,13 +44,35 @@ def month_stage_ids(conn, month_id: int) -> List[int]:
     return [s["id"] for s in db.list_stages(conn, month_id)]
 
 
+def count_held_stages(conn, month_id: int, modality: str) -> int:
+    """Quantas etapas do mês têm pelo menos um resultado nesta modalidade."""
+    stage_ids = month_stage_ids(conn, month_id)
+    n = 0
+    for sid in stage_ids:
+        r = conn.execute(
+            "SELECT COUNT(*) AS c FROM runs ru "
+            "JOIN enrollments e ON e.id=ru.enrollment_id "
+            "WHERE e.stage_id=? AND e.modality=?", (sid, modality)).fetchone()
+        if r["c"] > 0:
+            n += 1
+    return n
+
+
+def monthly_best_n(conn, month_id: int, modality: str) -> int:
+    """Quantas etapas contam no mês: todas menos a pior (mínimo 1)."""
+    held = count_held_stages(conn, month_id, modality)
+    return max(1, held - 1)
+
+
 def monthly_classification(conn, month_id: int, modality: str,
-                           category_id: int, best_n: int = 3) -> List[Dict[str, Any]]:
+                           category_id: int, best_n: int = None) -> List[Dict[str, Any]]:
     """
-    Classificação mensal de uma categoria: soma das N melhores etapas.
-    Considera todos os atiradores que têm a categoria 'congelada' nesse mês
-    naquela modalidade (ou que se inscreveram nela).
+    Classificação mensal de uma categoria.
+    Conta todas as etapas realizadas no mês MENOS a pior (descarte da pior).
+    Ex.: 4 etapas -> contam 3; 5 etapas -> contam 4; 3 etapas -> contam 2.
     """
+    if best_n is None:
+        best_n = monthly_best_n(conn, month_id, modality)
     stage_ids = month_stage_ids(conn, month_id)
     # pontos por etapa por atirador
     per_shooter: Dict[int, List[float]] = {}
