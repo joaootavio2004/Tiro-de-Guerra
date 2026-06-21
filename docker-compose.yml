@@ -1,0 +1,20 @@
+# Para o Coolify: crie um recurso do tipo "Docker Compose" apontando para
+# este repositório. Defina as variáveis BOT_TOKEN e ADMIN_IDS no painel.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - CLUB_NAME=${CLUB_NAME:-GUERRA Clube de Tiro}
+      - TZ=${TZ:-America/Sao_Paulo}
+      - PORT=8000
+      - DB_PATH=/app/data/tiro_guerra.db
+    ports:
+      - "8000:8000"
+    volumes:
+      - tiroguerra_data:/app/data
+
+volumes:
+  tiroguerra_data:
