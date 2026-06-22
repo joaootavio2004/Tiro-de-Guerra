@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, ContextTypes, filters)
 
-from . import config, db, texts
+from . import config, db, texts, util
 from . import standings as st
 
 log = logging.getLogger("bot")
@@ -63,6 +63,8 @@ def main_menu_kb(role):
     if can_result(role):
         rows.append([btn("🎯 Lançar resultado", "result")])
     rows.append([btn("🏆 Classificação", "stand")])
+    if can_enroll(role):
+        rows.append([btn("👤 Atiradores", "shooters")])
     if is_admin(role):
         rows.append([btn("⚙️ Administração", "admin")])
     return kb(rows)
@@ -209,6 +211,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("adm:"):
         return await admin_router(update, context, role)
 
+    # ---- Atiradores (cadastro/edição) ----
+    if data == "shooters":
+        return await shooters_menu(update, context, role)
+    if data.startswith("sh:"):
+        return await shooters_router(update, context, role)
+
 
 # ============================================================================
 # Entrada de texto (depende do estado em user_data['await'])
@@ -225,13 +233,27 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if awaiting == "enroll_search":
         return await enroll_do_search(update, context, text)
     if awaiting == "enroll_newname":
-        return await enroll_create_shooter(update, context, text)
+        return await enroll_new_name(update, context, text)
+    if awaiting == "enroll_newcpf":
+        return await enroll_new_cpf(update, context, text)
     if awaiting == "result_time":
         return await result_set_time(update, context, text)
     if awaiting == "cat_new_name":
         return await admin_cat_create(update, context, text)
     if awaiting == "stage_date":
         return await admin_stage_create_with_date(update, context, text)
+    if awaiting == "sh_new_name":
+        return await sh_new_name(update, context, text)
+    if awaiting == "sh_new_cpf":
+        return await sh_new_cpf(update, context, text)
+    if awaiting == "sh_find":
+        return await sh_do_search(update, context, text)
+    if awaiting == "sh_edit_name":
+        return await sh_save_name(update, context, text)
+    if awaiting == "sh_edit_cpf":
+        return await sh_save_cpf(update, context, text)
+    if awaiting == "sh_merge_search":
+        return await sh_merge_search(update, context, text)
 
 
 # ============================================================================
@@ -324,23 +346,53 @@ async def enroll_do_search(update, context, term):
     await update.message.reply_text(msg, reply_markup=kb(rows))
 
 
-async def enroll_create_shooter(update, context, name):
+async def enroll_new_name(update, context, name):
     if len(name) < 3:
         await update.message.reply_text("Nome muito curto. Digite o nome completo.")
         return
+    e = context.user_data.get("enroll", {})
+    e["new_name"] = name
+    context.user_data["enroll"] = e
+    context.user_data["await"] = "enroll_newcpf"
+    await update.message.reply_text(
+        f"Nome: *{name}*\n\nAgora digite o *CPF* (obrigatório):",
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def enroll_new_cpf(update, context, cpf):
+    if not util.valid_cpf(cpf):
+        await update.message.reply_text(
+            "CPF inválido. Digite os 11 números do CPF (ex.: 123.456.789-09).")
+        return
+    e = context.user_data.get("enroll", {})
     conn = db.get_conn()
     try:
-        sid = db.create_shooter(conn, name)
-        conn.commit()
+        existing = db.get_shooter_by_cpf(conn, cpf)
+        if existing:
+            # já existe: usa o cadastro existente em vez de duplicar
+            e["shooter_id"] = existing["id"]
+            context.user_data["enroll"] = e
+            context.user_data.pop("await", None)
+            name = existing["name"]
+            already = True
+        else:
+            sid = db.create_shooter(conn, e["new_name"], cpf)
+            conn.commit()
+            e["shooter_id"] = sid
+            context.user_data["enroll"] = e
+            context.user_data.pop("await", None)
+            name = e["new_name"]
+            already = False
     finally:
         conn.close()
-    e = context.user_data.get("enroll", {})
-    e["shooter_id"] = sid
-    context.user_data["enroll"] = e
-    context.user_data.pop("await", None)
-    # manda como nova mensagem (veio de texto)
-    await update.message.reply_text(f"✅ Atirador cadastrado: *{name}*",
-                                    parse_mode=ParseMode.MARKDOWN)
+    if already:
+        await update.message.reply_text(
+            f"ℹ️ Esse CPF já é de *{name}* — vou usar esse cadastro (sem duplicar).",
+            parse_mode=ParseMode.MARKDOWN)
+    else:
+        await update.message.reply_text(
+            f"✅ Atirador cadastrado: *{name}* · CPF {util.fmt_cpf(cpf)}",
+            parse_mode=ParseMode.MARKDOWN)
     await enroll_after_shooter(update, context, from_text=True)
 
 
@@ -1177,6 +1229,315 @@ async def _send_or_edit(update, context, from_text, txt, markup):
 
 async def on_noop(update, context):
     await update.callback_query.answer()
+
+
+# ============================================================================
+# FLUXO: ATIRADORES (cadastro / edição / mesclagem)
+# ============================================================================
+async def shooters_menu(update, context, role):
+    if not can_enroll(role):
+        return
+    context.user_data.pop("await", None)
+    context.user_data.pop("sh", None)
+    conn = db.get_conn()
+    try:
+        ndup = len(db.duplicate_groups(conn))
+    finally:
+        conn.close()
+    rows = [
+        [btn("➕ Cadastrar atirador", "sh:new")],
+        [btn("🔎 Buscar / editar", "sh:find")],
+    ]
+    extra = ""
+    if ndup:
+        rows.append([btn(f"🧩 Resolver duplicados ({ndup})", "sh:dups")])
+        extra = f"\n\n⚠️ Encontrei *{ndup}* nome(s) repetido(s) para resolver."
+    rows.append([btn("🏠 Menu", "home")])
+    await update.callback_query.edit_message_text(
+        "👤 *Atiradores*\n\nCadastre, edite ou junte cadastros repetidos." + extra,
+        reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+async def shooters_router(update, context, role):
+    if not can_enroll(role):
+        return
+    q = update.callback_query
+    parts = q.data.split(":")
+    sub = parts[1]
+
+    if sub == "new":
+        context.user_data["sh"] = {}
+        context.user_data["await"] = "sh_new_name"
+        return await q.edit_message_text(
+            "➕ *Cadastrar atirador*\n\nDigite o *nome completo*:",
+            parse_mode=ParseMode.MARKDOWN)
+    if sub == "find":
+        context.user_data["await"] = "sh_find"
+        return await q.edit_message_text(
+            "🔎 Digite parte do *nome* do atirador:",
+            reply_markup=kb([[btn("⬅️ Voltar", "shooters")]]),
+            parse_mode=ParseMode.MARKDOWN)
+    if sub == "pick":
+        return await sh_detail(update, context, int(parts[2]))
+    if sub == "editname":
+        context.user_data["await"] = "sh_edit_name"
+        context.user_data["sh"] = {"id": int(parts[2])}
+        return await q.edit_message_text("✏️ Digite o *novo nome*:",
+                                         parse_mode=ParseMode.MARKDOWN)
+    if sub == "editcpf":
+        context.user_data["await"] = "sh_edit_cpf"
+        context.user_data["sh"] = {"id": int(parts[2])}
+        return await q.edit_message_text("✏️ Digite o *CPF*:",
+                                         parse_mode=ParseMode.MARKDOWN)
+    if sub == "merge":
+        context.user_data["sh"] = {"src": int(parts[2])}
+        context.user_data["await"] = "sh_merge_search"
+        conn = db.get_conn()
+        try:
+            s = db.get_shooter(conn, int(parts[2]))
+        finally:
+            conn.close()
+        return await q.edit_message_text(
+            f"🧩 *Juntar cadastro*\n\nVocê escolheu *{s['name']}* como o cadastro "
+            "*duplicado* (que vai sumir).\n\nAgora digite o nome do cadastro "
+            "*correto* (que vai ficar):", parse_mode=ParseMode.MARKDOWN)
+    if sub == "mergeto":
+        src = context.user_data.get("sh", {}).get("src")
+        dst = int(parts[2])
+        return await sh_merge_confirm(update, context, src, dst)
+    if sub == "mergeok":
+        return await sh_merge_do(update, context, int(parts[2]), int(parts[3]))
+    if sub == "del":
+        return await sh_delete_confirm(update, context, int(parts[2]))
+    if sub == "delok":
+        return await sh_delete(update, context, int(parts[2]))
+    if sub == "dups":
+        return await sh_dups(update, context)
+
+
+# ---- cadastro novo ----
+async def sh_new_name(update, context, name):
+    if len(name) < 3:
+        await update.message.reply_text("Nome muito curto. Digite o nome completo.")
+        return
+    context.user_data["sh"] = {"name": name}
+    context.user_data["await"] = "sh_new_cpf"
+    await update.message.reply_text(
+        f"Nome: *{name}*\n\nAgora o *CPF* (obrigatório):",
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def sh_new_cpf(update, context, cpf):
+    if not util.valid_cpf(cpf):
+        await update.message.reply_text(
+            "CPF inválido. Digite os 11 números (ex.: 123.456.789-09).")
+        return
+    name = context.user_data.get("sh", {}).get("name", "")
+    conn = db.get_conn()
+    try:
+        existing = db.get_shooter_by_cpf(conn, cpf)
+        if existing:
+            context.user_data.pop("await", None)
+            await update.message.reply_text(
+                f"ℹ️ Esse CPF já está cadastrado para *{existing['name']}*. "
+                "Não criei duplicado.", parse_mode=ParseMode.MARKDOWN)
+            return await sh_detail(update, context, existing["id"], from_text=True)
+        sid = db.create_shooter(conn, name, cpf)
+        conn.commit()
+    finally:
+        conn.close()
+    context.user_data.pop("await", None)
+    context.user_data.pop("sh", None)
+    await update.message.reply_text(
+        f"✅ Cadastrado: *{name}* · CPF {util.fmt_cpf(cpf)}",
+        reply_markup=kb([[btn("👤 Atiradores", "shooters")],
+                         [btn("🏠 Menu", "home")]]),
+        parse_mode=ParseMode.MARKDOWN)
+
+
+# ---- busca / detalhe ----
+async def sh_do_search(update, context, term):
+    if len(term) < 2:
+        await update.message.reply_text("Digite ao menos 2 letras.")
+        return
+    conn = db.get_conn()
+    try:
+        results = db.search_shooters(conn, term, limit=10)
+    finally:
+        conn.close()
+    rows = [[btn(r["name"], f"sh:pick:{r['id']}")] for r in results]
+    rows.append([btn("⬅️ Voltar", "shooters")])
+    msg = "Selecione:" if results else "Nenhum encontrado. Tente outro nome."
+    await update.message.reply_text(msg, reply_markup=kb(rows))
+
+
+async def sh_detail(update, context, sid, from_text=False):
+    conn = db.get_conn()
+    try:
+        s = db.get_shooter(conn, sid)
+        if not s:
+            return
+        ncpf = util.fmt_cpf(s["cpf"]) if s["cpf"] else "— (não cadastrado)"
+        nenr = db.count_shooter_enrollments(conn, sid)
+        cats = []
+        for mod in ("pistola", "carabina"):
+            cid = db.get_shooter_category(conn, sid, mod)
+            if cid:
+                c = db.get_category(conn, cid)
+                cats.append(f"{texts.modality_label(mod)}: {c['name']}")
+    finally:
+        conn.close()
+    txt = (f"👤 *{s['name']}*\n\n"
+           f"CPF: {ncpf}\n"
+           + ("Categorias: " + " · ".join(cats) + "\n" if cats else "")
+           + f"Inscrições registradas: {nenr}")
+    rows = [
+        [btn("✏️ Editar nome", f"sh:editname:{sid}"),
+         btn("✏️ Editar CPF", f"sh:editcpf:{sid}")],
+        [btn("🧩 Juntar com duplicado", f"sh:merge:{sid}")],
+        [btn("🗑️ Excluir", f"sh:del:{sid}")],
+        [btn("⬅️ Voltar", "shooters")],
+    ]
+    await _send_or_edit(update, context, from_text, txt, kb(rows))
+
+
+async def sh_save_name(update, context, name):
+    if len(name) < 3:
+        await update.message.reply_text("Nome muito curto.")
+        return
+    sid = context.user_data.get("sh", {}).get("id")
+    conn = db.get_conn()
+    try:
+        db.update_shooter(conn, sid, name=name)
+        conn.commit()
+    finally:
+        conn.close()
+    context.user_data.pop("await", None)
+    await update.message.reply_text("✅ Nome atualizado.")
+    await sh_detail(update, context, sid, from_text=True)
+
+
+async def sh_save_cpf(update, context, cpf):
+    if not util.valid_cpf(cpf):
+        await update.message.reply_text(
+            "CPF inválido. Digite os 11 números (ex.: 123.456.789-09).")
+        return
+    sid = context.user_data.get("sh", {}).get("id")
+    conn = db.get_conn()
+    try:
+        other = db.get_shooter_by_cpf(conn, cpf)
+        if other and other["id"] != sid:
+            await update.message.reply_text(
+                f"⚠️ Esse CPF já é de *{other['name']}*. Se forem a mesma pessoa, "
+                "use *Juntar com duplicado*.", parse_mode=ParseMode.MARKDOWN)
+            return
+        db.update_shooter(conn, sid, cpf=cpf)
+        conn.commit()
+    finally:
+        conn.close()
+    context.user_data.pop("await", None)
+    await update.message.reply_text("✅ CPF atualizado.")
+    await sh_detail(update, context, sid, from_text=True)
+
+
+# ---- mesclagem ----
+async def sh_merge_search(update, context, term):
+    src = context.user_data.get("sh", {}).get("src")
+    conn = db.get_conn()
+    try:
+        results = [r for r in db.search_shooters(conn, term, limit=10)
+                   if r["id"] != src]
+    finally:
+        conn.close()
+    rows = [[btn(r["name"], f"sh:mergeto:{r['id']}")] for r in results]
+    rows.append([btn("⬅️ Cancelar", "shooters")])
+    msg = ("Escolha o cadastro *correto* (que vai ficar):" if results
+           else "Nenhum encontrado. Tente outro nome.")
+    await update.message.reply_text(msg, reply_markup=kb(rows),
+                                    parse_mode=ParseMode.MARKDOWN)
+
+
+async def sh_merge_confirm(update, context, src, dst):
+    conn = db.get_conn()
+    try:
+        a = db.get_shooter(conn, src)
+        b = db.get_shooter(conn, dst)
+        na = db.count_shooter_enrollments(conn, src)
+    finally:
+        conn.close()
+    await update.callback_query.edit_message_text(
+        f"🧩 *Confirmar junção*\n\n"
+        f"O cadastro *{a['name']}* (duplicado) será apagado e suas {na} "
+        f"inscrição(ões) passam para *{b['name']}*.\n\nConfirmar?",
+        reply_markup=kb([[btn("✅ Juntar", f"sh:mergeok:{src}:{dst}")],
+                         [btn("⬅️ Cancelar", "shooters")]]),
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def sh_merge_do(update, context, src, dst):
+    conn = db.get_conn()
+    try:
+        db.merge_shooters(conn, src, dst)
+        conn.commit()
+    finally:
+        conn.close()
+    context.user_data.pop("sh", None)
+    await update.callback_query.answer("Cadastros juntados.")
+    await sh_detail(update, context, dst)
+
+
+# ---- exclusão ----
+async def sh_delete_confirm(update, context, sid):
+    conn = db.get_conn()
+    try:
+        s = db.get_shooter(conn, sid)
+        n = db.count_shooter_enrollments(conn, sid)
+    finally:
+        conn.close()
+    aviso = (f"⚠️ *Excluir {s['name']}?*\n\n"
+             + (f"Ele tem *{n}* inscrição(ões); excluir apaga também os "
+                "resultados dele. " if n else "")
+             + "Esta ação não pode ser desfeita.")
+    await update.callback_query.edit_message_text(
+        aviso, reply_markup=kb([[btn("🗑️ Sim, excluir", f"sh:delok:{sid}")],
+                                [btn("⬅️ Cancelar", f"sh:pick:{sid}")]]),
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def sh_delete(update, context, sid):
+    conn = db.get_conn()
+    try:
+        db.delete_shooter(conn, sid)
+        conn.commit()
+    finally:
+        conn.close()
+    await update.callback_query.answer("Atirador excluído.")
+    await shooters_menu(update, context, role_of(update.effective_user.id))
+
+
+# ---- duplicados óbvios (mesmo nome normalizado) ----
+async def sh_dups(update, context):
+    conn = db.get_conn()
+    try:
+        groups = db.duplicate_groups(conn)
+    finally:
+        conn.close()
+    if not groups:
+        return await update.callback_query.edit_message_text(
+            "✅ Nenhum duplicado óbvio encontrado.\n\n"
+            "Para juntar cadastros com grafias diferentes, use "
+            "*Buscar / editar* ▸ abrir o atirador ▸ *Juntar com duplicado*.",
+            reply_markup=kb([[btn("⬅️ Voltar", "shooters")]]),
+            parse_mode=ParseMode.MARKDOWN)
+    rows = []
+    lines = ["🧩 *Duplicados encontrados*\nToque para abrir e juntar:\n"]
+    for g in groups[:8]:
+        lines.append("• " + " = ".join(s["name"] for s in g))
+        for s in g:
+            rows.append([btn(f"Abrir: {s['name']}", f"sh:pick:{s['id']}")])
+    rows.append([btn("⬅️ Voltar", "shooters")])
+    await update.callback_query.edit_message_text(
+        "\n".join(lines), reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
 
 
 # ============================================================================

@@ -58,7 +58,7 @@
 
 <script>
   var DATA = {{ data|tojson }};
-  var activeId = null;
+  var activeId = '__all__';
 
   function esc(s){var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML;}
 
@@ -114,26 +114,27 @@
     empty.style.display='none';
 
     var ids = data.sections.map(function(s){return s.id;});
-    if(activeId===null || ids.indexOf(activeId)<0) activeId = ids[0];
+    if(activeId !== '__all__' && ids.indexOf(activeId)<0) activeId = '__all__';
 
-    tabs.innerHTML = data.sections.map(function(s){
+    var tabsHTML = '<button class="tab'+(activeId==='__all__'?' active':'')+
+      '" data-target="__all__">📋 Todas</button>';
+    tabsHTML += data.sections.map(function(s){
       var a = s.id===activeId ? ' active' : '';
       return '<button class="tab'+a+'" data-target="'+s.id+'">' +
         '<span class="mod">'+esc(s.modality_label)+'</span> · '+esc(s.category)+'</button>';
     }).join('');
+    tabs.innerHTML = tabsHTML;
 
+    panels.className = (activeId==='__all__') ? 'show-all' : '';
     panels.innerHTML = data.sections.map(function(s){
-      var a = s.id===activeId ? ' active' : '';
+      var a = (activeId!=='__all__' && s.id===activeId) ? ' active' : '';
       return '<section class="panel'+a+'" id="'+s.id+'">'+panelHTML(s)+'</section>';
     }).join('');
 
     tabs.querySelectorAll('.tab').forEach(function(tab){
       tab.addEventListener('click', function(){
         activeId = tab.getAttribute('data-target');
-        tabs.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-        panels.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-        tab.classList.add('active');
-        document.getElementById(activeId).classList.add('active');
+        render(data);
       });
     });
   }

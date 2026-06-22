@@ -11,6 +11,7 @@ from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 
 from . import config
+from . import util
 
 MODALITIES = ("pistola", "carabina")
 
@@ -51,6 +52,8 @@ CREATE TABLE IF NOT EXISTS categories (
 CREATE TABLE IF NOT EXISTS shooters (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     name       TEXT NOT NULL,
+    name_key   TEXT,
+    cpf        TEXT,
     active     INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL
 );
@@ -135,12 +138,23 @@ def init_db() -> None:
     conn = get_conn()
     try:
         conn.executescript(SCHEMA)
+        # Migração: garante colunas novas em bancos antigos
+        cols = [r["name"] for r in conn.execute("PRAGMA table_info(shooters)")]
+        if "name_key" not in cols:
+            conn.execute("ALTER TABLE shooters ADD COLUMN name_key TEXT")
+        if "cpf" not in cols:
+            conn.execute("ALTER TABLE shooters ADD COLUMN cpf TEXT")
+        # Preenche a chave de busca onde estiver vazia
+        for r in conn.execute(
+                "SELECT id, name FROM shooters "
+                "WHERE name_key IS NULL OR name_key=''").fetchall():
+            conn.execute("UPDATE shooters SET name_key=? WHERE id=?",
+                         (util.norm_name(r["name"]), r["id"]))
         # Carga inicial de categorias
         for name, modality, rank in DEFAULT_CATEGORIES:
             conn.execute(
                 "INSERT OR IGNORE INTO categories(name, modality, rank, active) "
                 "VALUES (?,?,?,1)", (name, modality, rank))
-        # Garante o mês atual aberto
         conn.commit()
         ensure_current_month(conn)
         conn.commit()
@@ -231,9 +245,13 @@ def add_category(conn, name: str, modality: str) -> int:
 # ATIRADORES
 # ----------------------------------------------------------------------------
 def search_shooters(conn, term: str, limit: int = 8) -> List[sqlite3.Row]:
+    """Busca sem depender de acento/maiúsculas (usa name_key normalizado)."""
+    key = util.norm_name(term)
+    if not key:
+        return []
     return conn.execute(
-        "SELECT * FROM shooters WHERE active=1 AND name LIKE ? "
-        "ORDER BY name LIMIT ?", (f"%{term.strip()}%", limit)).fetchall()
+        "SELECT * FROM shooters WHERE active=1 AND name_key LIKE ? "
+        "ORDER BY name LIMIT ?", (f"%{key}%", limit)).fetchall()
 
 
 def get_shooter(conn, shooter_id: int) -> Optional[sqlite3.Row]:
@@ -241,11 +259,87 @@ def get_shooter(conn, shooter_id: int) -> Optional[sqlite3.Row]:
                         (shooter_id,)).fetchone()
 
 
-def create_shooter(conn, name: str) -> int:
+def get_shooter_by_cpf(conn, cpf: str) -> Optional[sqlite3.Row]:
+    digits = util.only_digits(cpf)
+    if not digits:
+        return None
+    return conn.execute(
+        "SELECT * FROM shooters WHERE active=1 AND cpf=?", (digits,)).fetchone()
+
+
+def create_shooter(conn, name: str, cpf: str = None) -> int:
     cur = conn.execute(
-        "INSERT INTO shooters(name, active, created_at) VALUES (?,1,?)",
-        (name.strip(), now()))
+        "INSERT INTO shooters(name, name_key, cpf, active, created_at) "
+        "VALUES (?,?,?,1,?)",
+        (name.strip(), util.norm_name(name),
+         util.only_digits(cpf) if cpf else None, now()))
     return cur.lastrowid
+
+
+def update_shooter(conn, shooter_id: int, name: str = None,
+                   cpf: str = None) -> None:
+    if name is not None:
+        conn.execute("UPDATE shooters SET name=?, name_key=? WHERE id=?",
+                     (name.strip(), util.norm_name(name), shooter_id))
+    if cpf is not None:
+        conn.execute("UPDATE shooters SET cpf=? WHERE id=?",
+                     (util.only_digits(cpf), shooter_id))
+
+
+def count_shooter_enrollments(conn, shooter_id: int) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM enrollments WHERE shooter_id=?",
+        (shooter_id,)).fetchone()["n"]
+
+
+def delete_shooter(conn, shooter_id: int) -> None:
+    """Remove o atirador e tudo ligado a ele (inscrições, resultados, etc.)."""
+    conn.execute(
+        "DELETE FROM runs WHERE enrollment_id IN "
+        "(SELECT id FROM enrollments WHERE shooter_id=?)", (shooter_id,))
+    conn.execute("DELETE FROM enrollments WHERE shooter_id=?", (shooter_id,))
+    conn.execute("DELETE FROM shooter_modality WHERE shooter_id=?", (shooter_id,))
+    conn.execute("DELETE FROM month_category WHERE shooter_id=?", (shooter_id,))
+    conn.execute("DELETE FROM shooters WHERE id=?", (shooter_id,))
+
+
+def merge_shooters(conn, src_id: int, dst_id: int) -> None:
+    """Funde o atirador 'src' no 'dst' (mantém o dst) e apaga o src.
+    Move inscrições e resultados; em conflito de mesma etapa+modalidade,
+    junta as corridas na inscrição do dst."""
+    if src_id == dst_id:
+        return
+    src_enrolls = conn.execute(
+        "SELECT * FROM enrollments WHERE shooter_id=?", (src_id,)).fetchall()
+    for e in src_enrolls:
+        dst_enr = conn.execute(
+            "SELECT * FROM enrollments WHERE stage_id=? AND shooter_id=? "
+            "AND modality=?", (e["stage_id"], dst_id, e["modality"])).fetchone()
+        if dst_enr:
+            # já existe inscrição do dst nessa etapa/modalidade: move as corridas
+            conn.execute("UPDATE runs SET enrollment_id=? WHERE enrollment_id=?",
+                         (dst_enr["id"], e["id"]))
+            conn.execute(
+                "UPDATE enrollments SET runs_total=runs_total+? WHERE id=?",
+                (e["runs_total"], dst_enr["id"]))
+            conn.execute("DELETE FROM enrollments WHERE id=?", (e["id"],))
+        else:
+            conn.execute("UPDATE enrollments SET shooter_id=? WHERE id=?",
+                         (dst_id, e["id"]))
+    # preferências de categoria do dst são mantidas; remove o src
+    conn.execute("DELETE FROM shooter_modality WHERE shooter_id=?", (src_id,))
+    conn.execute("DELETE FROM month_category WHERE shooter_id=?", (src_id,))
+    conn.execute("DELETE FROM shooters WHERE id=?", (src_id,))
+
+
+def duplicate_groups(conn) -> List[List[sqlite3.Row]]:
+    """Grupos de atiradores com a MESMA chave normalizada (duplicados óbvios)."""
+    rows = conn.execute(
+        "SELECT * FROM shooters WHERE active=1 ORDER BY name").fetchall()
+    by_key: Dict[str, list] = {}
+    for r in rows:
+        by_key.setdefault(r["name_key"] or "", []).append(r)
+    return [v for v in by_key.values() if len(v) > 1]
 
 
 def get_shooter_category(conn, shooter_id: int, modality: str) -> Optional[int]:
