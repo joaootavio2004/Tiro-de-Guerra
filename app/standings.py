@@ -103,43 +103,76 @@ def monthly_classification(conn, month_id: int, modality: str,
     return rows
 
 
+def category_roster_ids(conn, month_id, modality, category_id):
+    return [r["shooter_id"] for r in conn.execute(
+        "SELECT DISTINCT shooter_id FROM month_category "
+        "WHERE month_id=? AND modality=? AND category_id=?",
+        (month_id, modality, category_id)).fetchall()]
+
+
+def monthly_classification_full(conn, month_id, modality, category_id,
+                                best_n=None):
+    """Classificação incluindo os integrantes que NÃO pontuaram (total 0),
+    para efeito de descida de categoria. Quem pontuou vem primeiro; os zerados
+    no fim, por nome."""
+    cl = monthly_classification(conn, month_id, modality, category_id, best_n)
+    scored = {r["shooter_id"] for r in cl}
+    zeros = []
+    for sid in category_roster_ids(conn, month_id, modality, category_id):
+        if sid in scored:
+            continue
+        sh = db.get_shooter(conn, sid)
+        if sh:
+            zeros.append({"shooter_id": sid, "shooter_name": sh["name"],
+                          "total": 0.0, "stage_points": []})
+    zeros.sort(key=lambda r: r["shooter_name"])
+    full = cl + zeros
+    for i, r in enumerate(full, 1):
+        r["pos"] = i
+    return full
+
+
 def promotion_proposal(conn, month_id: int) -> Dict[str, Any]:
     """
     Proposta de subidas/descidas para as categorias de PISTOLA.
-    - 3 melhores de cada categoria sobem (exceto a mais alta)
-    - 3 piores de cada categoria descem (exceto a mais baixa)
+    - Sobem os 3 melhores de cada categoria (exceto a mais alta).
+    - Descem os 3 últimos E quem não pontuou no mês (0 pontos), exceto na
+      categoria mais baixa.
     Carabina (geral) não tem subida/descida.
     """
-    cats = db.list_categories(conn, "pistola")  # ordenadas por rank asc
+    cats = db.list_categories(conn, "pistola")
     cats = sorted(cats, key=lambda c: c["rank"])
     by_rank = {c["rank"]: c for c in cats}
     max_rank = max(by_rank) if by_rank else 1
     min_rank = min(by_rank) if by_rank else 1
 
-    moves = []  # {shooter_id, name, from, to, direction}
+    moves = []  # {shooter_id, name, from, to, to_id, direction}
     for c in cats:
-        cl = monthly_classification(conn, month_id, "pistola", c["id"])
-        # só conta quem efetivamente pontuou
-        ranked = [r for r in cl if r["total"] > 0]
-        n = len(ranked)
-        # sobe: top 3 (se não for a categoria mais alta)
-        if c["rank"] < max_rank:
+        relega = c["rank"] > min_rank      # esta categoria rebaixa para a de baixo?
+        table = monthly_table(conn, month_id, "pistola", c["id"],
+                              include_roster=relega)
+        standings = table["rows"]          # ordenado por total desc, depois nome
+        if not standings:
+            continue
+        scorers = [r for r in standings if r["total"] > 0]
+
+        up_ids = set()
+        if c["rank"] < max_rank:           # sobe (exceto categoria mais alta)
             up_target = by_rank[c["rank"] + 1]
-            for r in ranked[:3]:
+            for r in scorers[:3]:
+                up_ids.add(r["shooter_id"])
                 moves.append({
-                    "shooter_id": r["shooter_id"], "name": r["shooter_name"],
+                    "shooter_id": r["shooter_id"], "name": r["name"],
                     "from": c["name"], "to": up_target["name"],
                     "to_id": up_target["id"], "direction": "sobe",
                 })
-        # desce: piores 3 (se não for a categoria mais baixa)
-        if c["rank"] > min_rank and n > 0:
+
+        if relega:                         # desce: os 3 últimos (no máx.), exceto quem subiu
             down_target = by_rank[c["rank"] - 1]
-            # evita sobrepor com quem subiu numa categoria de 1-5 pessoas
-            top_ids = {r["shooter_id"] for r in ranked[:3]}
-            bottom = [r for r in ranked[-3:] if r["shooter_id"] not in top_ids]
-            for r in bottom:
+            cand = [r for r in standings if r["shooter_id"] not in up_ids]
+            for r in cand[-3:]:
                 moves.append({
-                    "shooter_id": r["shooter_id"], "name": r["shooter_name"],
+                    "shooter_id": r["shooter_id"], "name": r["name"],
                     "from": c["name"], "to": down_target["name"],
                     "to_id": down_target["id"], "direction": "desce",
                 })
@@ -158,7 +191,8 @@ def _modality_has_results(conn, stage_id: int, modality: str) -> bool:
     return r["c"] > 0
 
 
-def monthly_table(conn, month_id: int, modality: str, category_id: int) -> Dict[str, Any]:
+def monthly_table(conn, month_id: int, modality: str, category_id: int,
+                  include_roster: bool = False) -> Dict[str, Any]:
     """
     Tabela no formato planilha para o site: TODAS as etapas do mês como colunas,
     com tempo + pontos por etapa e o total descartando a pior. Vale igual para
@@ -169,23 +203,32 @@ def monthly_table(conn, month_id: int, modality: str, category_id: int) -> Dict[
 
     stage_pts: Dict[int, Dict[int, float]] = {}
     stage_time: Dict[int, Dict[int, float]] = {}
-    enrolled_in: Dict[int, set] = {}
+    scored_in: Dict[int, set] = {}
     for s in stages:
         times = stage_best_times(conn, s["id"], modality, category_id)
         stage_pts[s["id"]] = stage_points(times)
         stage_time[s["id"]] = times
-        enrolled_in[s["id"]] = {sid for sid, t in times.items() if t is not None}
+        scored_in[s["id"]] = {sid for sid, t in times.items() if t is not None}
 
-    shooters: set = set()
+    # participantes = quem se inscreveu em ALGUMA etapa do mês nessa categoria
+    parts = conn.execute(
+        "SELECT DISTINCT e.shooter_id FROM enrollments e "
+        "JOIN stages st ON st.id=e.stage_id "
+        "WHERE st.month_id=? AND e.modality=? AND e.category_id=?",
+        (month_id, modality, category_id)).fetchall()
+    shooters: set = {r["shooter_id"] for r in parts}
     for s in stages:
-        shooters |= enrolled_in[s["id"]]
+        shooters |= scored_in[s["id"]]
+    # Ausentes da categoria (no elenco do mês, mas não pontuaram) entram como 0
+    if include_roster:
+        shooters |= set(category_roster_ids(conn, month_id, modality, category_id))
 
     rows = []
     for sid in shooters:
         cells = []
         pts_list = []
         for s in stages:
-            if sid in enrolled_in[s["id"]]:
+            if sid in scored_in[s["id"]]:
                 p = round(stage_pts[s["id"]][sid], 2)
                 t = stage_time[s["id"]][sid]
                 cells.append({"points": p, "time": f"{t:.2f}",
@@ -204,7 +247,7 @@ def monthly_table(conn, month_id: int, modality: str, category_id: int) -> Dict[
         sh = db.get_shooter(conn, sid)
         rows.append({"shooter_id": sid, "name": sh["name"] if sh else "?",
                      "cells": cells, "total": round(total, 2)})
-    rows.sort(key=lambda r: -r["total"])
+    rows.sort(key=lambda r: (-r["total"], r["name"]))
     for i, r in enumerate(rows, 1):
         r["pos"] = i
     return {

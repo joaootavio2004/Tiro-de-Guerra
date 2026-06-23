@@ -1193,6 +1193,19 @@ async def admin_month_close(update, context):
 async def admin_month_confirm(update, context):
     moves = context.user_data.get("month_moves", [])
     month_id = context.user_data.get("month_id")
+    # 1) Gera o PDF ANTES de fechar — nunca pode quebrar o fechamento
+    pdf_bytes, pdf_name = None, None
+    try:
+        from . import report
+        conn = db.get_conn()
+        try:
+            pdf_bytes = report.build_month_pdf(conn, month_id, moves)
+            pdf_name = report.month_pdf_filename(conn, month_id)
+        finally:
+            conn.close()
+    except Exception as e:
+        log.warning("Falha ao gerar PDF do mês: %s", e)
+    # 2) Aplica subidas/descidas e fecha o mês
     conn = db.get_conn()
     try:
         st.apply_promotions(conn, moves)
@@ -1204,9 +1217,24 @@ async def admin_month_confirm(update, context):
         conn.close()
     context.user_data.clear()
     await update.callback_query.edit_message_text(
-        "✅ *Mês fechado!* Categorias atualizadas e novo mês aberto.",
+        "✅ *Mês fechado!* Categorias atualizadas e novo mês aberto."
+        + ("\n\n📄 Enviando o PDF do resultado mensal..." if pdf_bytes else ""),
         reply_markup=kb([[btn("🏠 Menu", "home")]]),
         parse_mode=ParseMode.MARKDOWN)
+    # 3) Envia o PDF do resultado mensal
+    if pdf_bytes:
+        try:
+            import io
+            doc = io.BytesIO(pdf_bytes)
+            doc.name = pdf_name
+            await context.bot.send_document(
+                update.effective_chat.id, document=doc, filename=pdf_name,
+                caption="📄 Resultado mensal — Guerra Clube de Tiro")
+        except Exception as e:
+            log.warning("Falha ao enviar PDF do mês: %s", e)
+            await context.bot.send_message(
+                update.effective_chat.id,
+                "⚠️ O mês foi fechado, mas não consegui enviar o PDF.")
 
 
 # ============================================================================
