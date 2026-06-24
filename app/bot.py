@@ -62,6 +62,7 @@ def main_menu_kb(role):
     ]
     if can_result(role):
         rows.append([btn("🎯 Lançar resultado", "result")])
+        rows.append([btn("🔍 Consultar lançamentos", "lanc")])
     rows.append([btn("🏆 Classificação", "stand")])
     if can_enroll(role):
         rows.append([btn("👤 Atiradores", "shooters")])
@@ -216,6 +217,12 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await shooters_menu(update, context, role)
     if data.startswith("sh:"):
         return await shooters_router(update, context, role)
+
+    # ---- Consultar lançamentos (passadas da etapa aberta) ----
+    if data == "lanc":
+        return await lanc_menu(update, context, role)
+    if data.startswith("lc:"):
+        return await lanc_router(update, context, role)
 
 
 # ============================================================================
@@ -1566,6 +1573,130 @@ async def sh_dups(update, context):
     rows.append([btn("⬅️ Voltar", "shooters")])
     await update.callback_query.edit_message_text(
         "\n".join(lines), reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+# ============================================================================
+# FLUXO: CONSULTAR LANÇAMENTOS (passadas da etapa aberta)
+# ============================================================================
+def _pen_seconds(r):
+    return r["pen2"] * 2 + r["pen5"] * 5 + r["pen10"] * 10
+
+
+def _run_label(idx, r):
+    if r["dq"]:
+        return f"Passada {idx}: DQ"
+    pen = _pen_seconds(r)
+    base = texts.fmt_time(r["final_time"])
+    if pen:
+        return f"Passada {idx}: {base} (bruto {texts.fmt_time(r['raw_time'])} +{pen}s)"
+    return f"Passada {idx}: {base}"
+
+
+async def lanc_menu(update, context, role):
+    if not can_result(role):
+        return
+    conn = db.get_conn()
+    try:
+        stage = db.get_open_stage(conn)
+        if not stage:
+            return await update.callback_query.edit_message_text(
+                "Nenhuma etapa aberta no momento.",
+                reply_markup=kb([[btn("🏠 Menu", "home")]]))
+        shooters = db.stage_shooters_with_runs(conn, stage["id"])
+        label = f"{stage['number']}ª Etapa · {texts.fmt_date(stage['date'])}"
+    finally:
+        conn.close()
+    if not shooters:
+        return await update.callback_query.edit_message_text(
+            f"🔍 *Lançamentos — {label}*\n\nNenhuma passada lançada ainda.",
+            reply_markup=kb([[btn("🏠 Menu", "home")]]),
+            parse_mode=ParseMode.MARKDOWN)
+    rows = [[btn(f"{s['name']} · {s['n_runs']} passada"
+                 f"{'s' if s['n_runs'] != 1 else ''}", f"lc:sh:{s['id']}")]
+            for s in shooters]
+    rows.append([btn("🏠 Menu", "home")])
+    await update.callback_query.edit_message_text(
+        f"🔍 *Lançamentos — {label}*\n\nToque num atirador para ver as passadas:",
+        reply_markup=kb(rows), parse_mode=ParseMode.MARKDOWN)
+
+
+async def lanc_router(update, context, role):
+    if not can_result(role):
+        return
+    parts = update.callback_query.data.split(":")
+    sub = parts[1]
+    if sub == "sh":
+        return await lanc_shooter(update, context, int(parts[2]))
+    if sub == "del":
+        return await lanc_del_confirm(update, context, int(parts[2]), int(parts[3]))
+    if sub == "delok":
+        return await lanc_del(update, context, int(parts[2]), int(parts[3]))
+
+
+async def lanc_shooter(update, context, sid):
+    conn = db.get_conn()
+    try:
+        stage = db.get_open_stage(conn)
+        if not stage:
+            return await lanc_menu(update, context,
+                                   role_of(update.effective_user.id))
+        sh = db.get_shooter(conn, sid)
+        enrolls = db.shooter_stage_enrollments(conn, stage["id"], sid)
+        blocks = []   # (titulo, [(run_id, label)])
+        for e in enrolls:
+            cat = db.get_category(conn, e["category_id"])
+            runs = db.list_runs(conn, e["id"])
+            if not runs:
+                continue
+            title = f"{texts.modality_label(e['modality'])} · {cat['name']}"
+            items = [(r["id"], _run_label(i, r)) for i, r in enumerate(runs, 1)]
+            blocks.append((title, items))
+    finally:
+        conn.close()
+    if not blocks:
+        return await update.callback_query.edit_message_text(
+            f"*{sh['name']}* não tem passadas nesta etapa.",
+            reply_markup=kb([[btn("⬅️ Voltar", "lanc")]]),
+            parse_mode=ParseMode.MARKDOWN)
+    lines = [f"🎯 *{sh['name']}*", ""]
+    rows = []
+    for title, items in blocks:
+        lines.append(f"*{title}*")
+        for run_id, label in items:
+            lines.append(f"  • {label}")
+            rows.append([btn(f"🗑️ {label}", f"lc:del:{run_id}:{sid}")])
+        lines.append("")
+    rows.append([btn("⬅️ Voltar", "lanc")])
+    await update.callback_query.edit_message_text(
+        "\n".join(lines).strip(), reply_markup=kb(rows),
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def lanc_del_confirm(update, context, run_id, sid):
+    conn = db.get_conn()
+    try:
+        r = db.get_run(conn, run_id)
+        if not r:
+            return await lanc_shooter(update, context, sid)
+        label = _run_label(0, r).split(": ", 1)[-1]
+    finally:
+        conn.close()
+    await update.callback_query.edit_message_text(
+        f"🗑️ Excluir esta passada?\n\n*{label}*\n\nNão pode ser desfeito.",
+        reply_markup=kb([[btn("🗑️ Sim, excluir", f"lc:delok:{run_id}:{sid}")],
+                         [btn("⬅️ Cancelar", f"lc:sh:{sid}")]]),
+        parse_mode=ParseMode.MARKDOWN)
+
+
+async def lanc_del(update, context, run_id, sid):
+    conn = db.get_conn()
+    try:
+        db.delete_run(conn, run_id)
+        conn.commit()
+    finally:
+        conn.close()
+    await update.callback_query.answer("Passada excluída.")
+    await lanc_shooter(update, context, sid)
 
 
 # ============================================================================

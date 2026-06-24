@@ -592,3 +592,45 @@ def any_dq(conn, enrollment_id: int) -> bool:
         "SELECT COUNT(*) AS n FROM runs WHERE enrollment_id=? AND dq=1",
         (enrollment_id,)).fetchone()
     return r["n"] > 0
+
+
+def list_runs(conn, enrollment_id: int) -> List[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM runs WHERE enrollment_id=? ORDER BY id",
+        (enrollment_id,)).fetchall()
+
+
+def get_run(conn, run_id: int) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+
+
+def delete_run(conn, run_id: int) -> Optional[sqlite3.Row]:
+    """Apaga uma passada e devolve a inscrição a que ela pertencia."""
+    r = get_run(conn, run_id)
+    if not r:
+        return None
+    conn.execute("DELETE FROM runs WHERE id=?", (run_id,))
+    return get_enrollment_by_id(conn, r["enrollment_id"])
+
+
+def get_enrollment_by_id(conn, enrollment_id: int) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT * FROM enrollments WHERE id=?",
+                        (enrollment_id,)).fetchone()
+
+
+def stage_shooters_with_runs(conn, stage_id: int) -> List[sqlite3.Row]:
+    """Atiradores que já têm ao menos uma passada lançada na etapa."""
+    return conn.execute(
+        "SELECT s.id, s.name, COUNT(r.id) AS n_runs "
+        "FROM shooters s "
+        "JOIN enrollments e ON e.shooter_id=s.id "
+        "JOIN runs r ON r.enrollment_id=e.id "
+        "WHERE e.stage_id=? GROUP BY s.id, s.name ORDER BY s.name",
+        (stage_id,)).fetchall()
+
+
+def shooter_stage_enrollments(conn, stage_id: int,
+                              shooter_id: int) -> List[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM enrollments WHERE stage_id=? AND shooter_id=? "
+        "ORDER BY modality", (stage_id, shooter_id)).fetchall()
