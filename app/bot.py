@@ -2244,16 +2244,20 @@ async def sh_cat_set(update, context, sid, cat_id):
     conn = db.get_conn()
     try:
         cat = db.get_category(conn, cat_id)
-        db.set_shooter_category(conn, sid, cat["modality"], cat_id)
+        moved = db.change_shooter_category_open_month(conn, sid,
+                                                      cat["modality"], cat_id)
         conn.commit()
         n = db.category_member_count(conn, cat_id)
         over = cat["max_shooters"] and n > cat["max_shooters"]
     finally:
         conn.close()
     msg = f"Categoria alterada para {cat['name']}."
+    if moved:
+        msg += (f" {moved} inscrição(ões) do mês aberto foram movidas junto. "
+                "Meses fechados não mudam.")
     if over:
         msg += f" ⚠️ A categoria passou do limite ({n}/{cat['max_shooters']})."
-    await update.callback_query.answer(msg, show_alert=bool(over))
+    await update.callback_query.answer(msg, show_alert=bool(over or moved))
     await sh_detail(update, context, sid)
 
 

@@ -676,6 +676,43 @@ def set_shooter_category(conn, shooter_id: int, modality: str,
         (shooter_id, modality, category_id))
 
 
+def change_shooter_category_open_month(conn, shooter_id: int, modality: str,
+                                       category_id: int) -> int:
+    """
+    Alteração MANUAL de categoria (pelo admin).
+
+    Regra do clube: mês fechado é imutável (posições, categorias e pontos
+    nunca mudam); no mês ABERTO a mudança vale imediatamente — o snapshot
+    do mês e as inscrições das etapas dele passam para a nova categoria,
+    refletindo no site e no lançamento de resultados.
+
+    Devolve quantas inscrições do mês aberto foram movidas.
+    """
+    # 1) categoria "atual" do atirador (vale para os próximos meses)
+    set_shooter_category(conn, shooter_id, modality, category_id)
+
+    month = get_open_month(conn)
+    if not month:
+        return 0
+
+    # 2) snapshot do mês aberto acompanha a mudança
+    conn.execute(
+        "INSERT INTO month_category(month_id,shooter_id,modality,category_id) "
+        "VALUES (?,?,?,?) "
+        "ON CONFLICT(month_id,shooter_id,modality) "
+        "DO UPDATE SET category_id=excluded.category_id",
+        (month["id"], shooter_id, modality, category_id))
+
+    # 3) inscrições já feitas nas etapas do mês aberto vão para a nova
+    #    categoria (os meses fechados não são tocados)
+    cur = conn.execute(
+        "UPDATE enrollments SET category_id=? "
+        "WHERE shooter_id=? AND modality=? AND stage_id IN "
+        "(SELECT id FROM stages WHERE month_id=?)",
+        (category_id, shooter_id, modality, month["id"]))
+    return cur.rowcount
+
+
 def default_category_id(conn, modality: str) -> Optional[int]:
     """Categoria inicial configurada pelo admin; se não houver,
     usa a mais baixa (rank menor) da modalidade."""
@@ -810,9 +847,24 @@ def wipe_month(conn, month_id: int) -> None:
 def month_category_id(conn, month_id: int, shooter_id: int, modality: str,
                       fallback_category_id: int) -> int:
     """
-    Categoria do atirador NAQUELE mês. Se ainda não existir snapshot,
-    cria a partir da categoria atual (ou do fallback) e congela.
+    Categoria do atirador NAQUELE mês.
+
+    Regra do clube:
+    - Mês ABERTO: a categoria ATUAL do atirador é a verdade. O snapshot do
+      mês acompanha qualquer mudança (inclusive alterações manuais feitas
+      pelo admin) — assim, excluir e refazer a inscrição sempre usa a
+      categoria nova.
+    - Mês FECHADO: o snapshot está congelado e nunca muda.
     """
+    month = get_month(conn, month_id)
+    if month and month["status"] == "aberto":
+        conn.execute(
+            "INSERT INTO month_category(month_id,shooter_id,modality,category_id) "
+            "VALUES (?,?,?,?) "
+            "ON CONFLICT(month_id,shooter_id,modality) "
+            "DO UPDATE SET category_id=excluded.category_id",
+            (month_id, shooter_id, modality, fallback_category_id))
+        return fallback_category_id
     row = conn.execute(
         "SELECT category_id FROM month_category "
         "WHERE month_id=? AND shooter_id=? AND modality=?",
@@ -837,12 +889,14 @@ def get_enrollment(conn, stage_id: int, shooter_id: int,
 
 def enroll(conn, stage_id: int, shooter_id: int, modality: str,
            category_id: int, qty: int, created_by: int) -> sqlite3.Row:
-    """Inscreve (ou soma corridas se já inscrito) e devolve a inscrição."""
+    """Inscreve (ou soma corridas se já inscrito) e devolve a inscrição.
+    Se já inscrito, a categoria da inscrição é sincronizada com a categoria
+    resolvida para o mês (importante quando o admin mudou a categoria)."""
     existing = get_enrollment(conn, stage_id, shooter_id, modality)
     if existing:
         conn.execute(
-            "UPDATE enrollments SET runs_total = runs_total + ? WHERE id=?",
-            (qty, existing["id"]))
+            "UPDATE enrollments SET runs_total = runs_total + ?, category_id=? "
+            "WHERE id=?", (qty, category_id, existing["id"]))
         return get_enrollment(conn, stage_id, shooter_id, modality)
     cur = conn.execute(
         "INSERT INTO enrollments(stage_id,shooter_id,modality,category_id,"
