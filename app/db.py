@@ -201,6 +201,14 @@ def init_db() -> None:
             conn.execute("UPDATE shooters SET name_key=? WHERE id=?",
                          (util.norm_name(r["name"]), r["id"]))
 
+        # Nomes de atiradores sempre em CAIXA ALTA (converte os existentes;
+        # feito em Python porque o UPPER() do SQLite não cobre acentos)
+        for r in conn.execute("SELECT id, name FROM shooters").fetchall():
+            up = (r["name"] or "").strip().upper()
+            if up and up != r["name"]:
+                conn.execute("UPDATE shooters SET name=? WHERE id=?",
+                             (up, r["id"]))
+
         # --- categorias: novas colunas (limite, sobem, descem, inicial) ---
         cat_cols = [r["name"] for r in conn.execute("PRAGMA table_info(categories)")]
         legacy_cats = "promote_n" not in cat_cols
@@ -590,7 +598,7 @@ def create_shooter(conn, name: str, cpf: str = None) -> int:
     cur = conn.execute(
         "INSERT INTO shooters(name, name_key, cpf, active, created_at) "
         "VALUES (?,?,?,1,?)",
-        (name.strip(), util.norm_name(name),
+        (name.strip().upper(), util.norm_name(name),
          util.only_digits(cpf) if cpf else None, now()))
     return cur.lastrowid
 
@@ -599,7 +607,7 @@ def update_shooter(conn, shooter_id: int, name: str = None,
                    cpf: str = None) -> None:
     if name is not None:
         conn.execute("UPDATE shooters SET name=?, name_key=? WHERE id=?",
-                     (name.strip(), util.norm_name(name), shooter_id))
+                     (name.strip().upper(), util.norm_name(name), shooter_id))
     if cpf is not None:
         conn.execute("UPDATE shooters SET cpf=? WHERE id=?",
                      (util.only_digits(cpf), shooter_id))
