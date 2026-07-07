@@ -44,13 +44,30 @@ def parse_date(text: str):
         return None
 
 
+# Rótulos dinâmicos (carregados do banco no boot e após alterações do admin)
+_ROLE_LABELS = {"admin": "Administrador", "ro": "RO (linha de tiro)",
+                "recepcao": "Recepção"}
+_MOD_LABELS = {"pistola": "Pistola", "carabina": "Carabina"}
+
+
+def set_role_labels(d):
+    _ROLE_LABELS.update(d or {})
+
+
+def set_modality_labels(d):
+    _MOD_LABELS.update(d or {})
+
+
 def role_label(role: str) -> str:
-    return {"admin": "Administrador", "ro": "RO (linha de tiro)",
-            "recepcao": "Recepção"}.get(role, role)
+    return _ROLE_LABELS.get(role, str(role).replace("_", " ").title())
 
 
 def modality_label(m: str) -> str:
-    return {"pistola": "Pistola", "carabina": "Carabina"}.get(m, m)
+    return _MOD_LABELS.get(m, str(m).replace("_", " ").title())
+
+
+def modality_emoji(m: str) -> str:
+    return {"pistola": "🔫", "carabina": "🎯"}.get(m, "🔸")
 
 
 def enrolled_list_text(stage_label: str, enrolls: List[Dict[str, Any]]) -> str:

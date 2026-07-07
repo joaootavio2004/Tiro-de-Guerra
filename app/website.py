@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from . import config, db
+from . import config, db, texts
 from . import standings as st
 
 BASE = os.path.dirname(os.path.dirname(__file__))
@@ -20,13 +20,17 @@ templates = Jinja2Templates(directory=os.path.join(BASE, "templates"))
 MONTH_PT = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
             "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
-# Ordem de exibição das categorias (pistola do topo para a base, depois carabina)
-SECTION_ORDER = [
-    ("pistola", "Veterano de Guerra"),
-    ("pistola", "Guerreiro"),
-    ("pistola", "Combatente"),
-    ("carabina", "Geral"),
-]
+
+def section_order(conn):
+    """Ordem de exibição dinâmica: modalidades pela ordem cadastrada;
+    categorias da mais alta (rank maior) para a mais baixa."""
+    out = []
+    for mod in db.list_modalities(conn):
+        cats = sorted(db.list_categories(conn, mod["code"]),
+                      key=lambda c: -c["rank"])
+        for c in cats:
+            out.append((mod["code"], c))
+    return out
 
 
 def _fmt_date(iso):
@@ -52,12 +56,8 @@ def open_stage_payload(conn):
     if not stage:
         return {"open": False}
     sections = []
-    for modality, cat_name in SECTION_ORDER:
-        cat = conn.execute(
-            "SELECT * FROM categories WHERE modality=? AND name=?",
-            (modality, cat_name)).fetchone()
-        if not cat:
-            continue
+    for modality, cat in section_order(conn):
+        cat_name = cat["name"]
         enrolls = conn.execute(
             "SELECT e.id AS eid, e.shooter_id AS sid, s.name AS nm "
             "FROM enrollments e JOIN shooters s ON s.id=e.shooter_id "
@@ -82,7 +82,7 @@ def open_stage_payload(conn):
                          "time": f"{r['ft']:.2f}", "points": f"{pts:.2f}"})
         sections.append({
             "id": f"{modality}-{cat['id']}",
-            "modality_label": "Pistola" if modality == "pistola" else "Carabina",
+            "modality_label": texts.modality_label(modality),
             "category": cat_name, "rows": rows, "pending": pending,
         })
     return {
@@ -102,38 +102,44 @@ CAT_SHORT = {
 }
 
 
+def cat_short(name):
+    if name in CAT_SHORT:
+        return CAT_SHORT[name]
+    from .util import norm_name
+    key = norm_name(name).replace(" ", "")
+    return key[:3] or "—"
+
+
 def build_sections(conn, month_id):
     sections = []
-    # Pistola · Geral (junta as 3 categorias)
-    pistol_cats = [c for c in db.list_categories(conn, "pistola")]
-    pistol_cats = sorted(pistol_cats, key=lambda c: -c["rank"])
-    combined = st.monthly_table_combined(conn, month_id, "pistola", pistol_cats)
-    if combined["rows"]:
-        for r in combined["rows"]:
-            r["cat_short"] = CAT_SHORT.get(r.get("category", ""), "")
-        sections.append({
-            "id": "pistola-geral", "modality": "pistola",
-            "modality_label": "Pistola", "category": "Geral",
-            "combined": True, "table": combined,
-        })
-    # Categorias individuais (pistola do topo p/ base, depois carabina)
-    for modality, cat_name in SECTION_ORDER:
-        cat = conn.execute(
-            "SELECT * FROM categories WHERE modality=? AND name=?",
-            (modality, cat_name)).fetchone()
-        if not cat:
-            continue
-        table = st.monthly_table(conn, month_id, modality, cat["id"])
-        if not table["rows"]:
-            continue
-        sections.append({
-            "id": f"{modality}-{cat['id']}",
-            "modality": modality,
-            "modality_label": "Pistola" if modality == "pistola" else "Carabina",
-            "category": cat_name,
-            "combined": False,
-            "table": table,
-        })
+    for mod in db.list_modalities(conn):
+        mcode = mod["code"]
+        mlabel = texts.modality_label(mcode)
+        cats = sorted(db.list_categories(conn, mcode), key=lambda c: -c["rank"])
+        # Tabela "Geral" da modalidade (junta as categorias) quando há mais de 1
+        if len(cats) > 1:
+            combined = st.monthly_table_combined(conn, month_id, mcode, cats)
+            if combined["rows"]:
+                for r in combined["rows"]:
+                    r["cat_short"] = cat_short(r.get("category", ""))
+                sections.append({
+                    "id": f"{mcode}-geral", "modality": mcode,
+                    "modality_label": mlabel, "category": "Geral",
+                    "combined": True, "table": combined,
+                })
+        # Categorias individuais (da mais alta para a mais baixa)
+        for cat in cats:
+            table = st.monthly_table(conn, month_id, mcode, cat["id"])
+            if not table["rows"]:
+                continue
+            sections.append({
+                "id": f"{mcode}-{cat['id']}",
+                "modality": mcode,
+                "modality_label": mlabel,
+                "category": cat["name"],
+                "combined": False,
+                "table": table,
+            })
     return sections
 
 
@@ -161,8 +167,7 @@ def register_web(app):
             sections = build_sections(conn, current["id"])
             all_stages = db.list_stages(conn, current["id"])
             stage_dates = [_fmt_date_long(s["date"]) for s in all_stages
-                           if st._modality_has_results(conn, s["id"], "pistola")
-                           or st._modality_has_results(conn, s["id"], "carabina")]
+                           if db.stage_result_count(conn, s["id"]) > 0]
             month_options = [{
                 "id": m["id"],
                 "label": f"{MONTH_PT[m['month']]} {m['year']}",

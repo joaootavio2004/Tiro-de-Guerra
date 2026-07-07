@@ -134,54 +134,75 @@ def monthly_classification_full(conn, month_id, modality, category_id,
 
 def promotion_proposal(conn, month_id: int) -> Dict[str, Any]:
     """
-    Proposta de subidas/descidas para as categorias de PISTOLA.
-    - Sobem os 3 melhores de cada categoria (exceto a mais alta).
-    - Descem os 3 últimos E quem não pontuou no mês (0 pontos), exceto na
-      categoria mais baixa.
-    Carabina (geral) não tem subida/descida.
+    Proposta de subidas/descidas para TODAS as modalidades, usando a
+    configuração de cada categoria (promote_n = quantos sobem;
+    demote_n = quantos descem), respeitando a hierarquia (rank).
+    Categorias sem vizinha acima não sobem; sem vizinha abaixo não descem.
     """
-    cats = db.list_categories(conn, "pistola")
-    cats = sorted(cats, key=lambda c: c["rank"])
-    by_rank = {c["rank"]: c for c in cats}
-    max_rank = max(by_rank) if by_rank else 1
-    min_rank = min(by_rank) if by_rank else 1
-
-    moves = []  # {shooter_id, name, from, to, to_id, direction}
-    for c in cats:
-        relega = c["rank"] > min_rank      # esta categoria rebaixa para a de baixo?
-        table = monthly_table(conn, month_id, "pistola", c["id"],
-                              include_roster=relega)
-        standings = table["rows"]          # ordenado por total desc, depois nome
-        if not standings:
+    moves = []      # {shooter_id, name, from, to, to_id, direction, modality}
+    warnings = []   # avisos de limite de vagas após os movimentos
+    for mod in db.list_modalities(conn):
+        mcode = mod["code"]
+        cats = sorted(db.list_categories(conn, mcode), key=lambda c: c["rank"])
+        if len(cats) < 2:
             continue
-        scorers = [r for r in standings if r["total"] > 0]
+        for idx, c in enumerate(cats):
+            has_higher = idx < len(cats) - 1
+            has_lower = idx > 0
+            up_n = c["promote_n"] or 0
+            down_n = c["demote_n"] or 0
+            demotes = has_lower and down_n > 0
+            table = monthly_table(conn, month_id, mcode, c["id"],
+                                  include_roster=demotes)
+            standings = table["rows"]      # ordenado por total desc, depois nome
+            if not standings:
+                continue
+            scorers = [r for r in standings if r["total"] > 0]
 
-        up_ids = set()
-        if c["rank"] < max_rank:           # sobe (exceto categoria mais alta)
-            up_target = by_rank[c["rank"] + 1]
-            for r in scorers[:3]:
-                up_ids.add(r["shooter_id"])
-                moves.append({
-                    "shooter_id": r["shooter_id"], "name": r["name"],
-                    "from": c["name"], "to": up_target["name"],
-                    "to_id": up_target["id"], "direction": "sobe",
-                })
+            up_ids = set()
+            if has_higher and up_n > 0:
+                up_target = cats[idx + 1]
+                for r in scorers[:up_n]:
+                    up_ids.add(r["shooter_id"])
+                    moves.append({
+                        "shooter_id": r["shooter_id"], "name": r["name"],
+                        "from": c["name"], "to": up_target["name"],
+                        "to_id": up_target["id"], "direction": "sobe",
+                        "modality": mcode,
+                    })
 
-        if relega:                         # desce: os 3 últimos (no máx.), exceto quem subiu
-            down_target = by_rank[c["rank"] - 1]
-            cand = [r for r in standings if r["shooter_id"] not in up_ids]
-            for r in cand[-3:]:
-                moves.append({
-                    "shooter_id": r["shooter_id"], "name": r["name"],
-                    "from": c["name"], "to": down_target["name"],
-                    "to_id": down_target["id"], "direction": "desce",
-                })
-    return {"moves": moves}
+            if demotes:
+                down_target = cats[idx - 1]
+                cand = [r for r in standings if r["shooter_id"] not in up_ids]
+                for r in cand[-down_n:]:
+                    moves.append({
+                        "shooter_id": r["shooter_id"], "name": r["name"],
+                        "from": c["name"], "to": down_target["name"],
+                        "to_id": down_target["id"], "direction": "desce",
+                        "modality": mcode,
+                    })
+
+        # Verifica limites de vagas após aplicar os movimentos
+        counts = {c["id"]: db.category_member_count(conn, c["id"]) for c in cats}
+        for m in moves:
+            if m["modality"] != mcode:
+                continue
+            frm = next((c for c in cats if c["name"] == m["from"]), None)
+            if frm:
+                counts[frm["id"]] = counts.get(frm["id"], 0) - 1
+            counts[m["to_id"]] = counts.get(m["to_id"], 0) + 1
+        for c in cats:
+            if c["max_shooters"] and counts.get(c["id"], 0) > c["max_shooters"]:
+                warnings.append(
+                    f"{c['name']}: ficaria com {counts[c['id']]} atiradores "
+                    f"(limite {c['max_shooters']})")
+    return {"moves": moves, "warnings": warnings}
 
 
 def apply_promotions(conn, moves: List[Dict[str, Any]]) -> None:
     for m in moves:
-        db.set_shooter_category(conn, m["shooter_id"], "pistola", m["to_id"])
+        db.set_shooter_category(conn, m["shooter_id"],
+                                m.get("modality", "pistola"), m["to_id"])
 
 
 def _modality_has_results(conn, stage_id: int, modality: str) -> bool:

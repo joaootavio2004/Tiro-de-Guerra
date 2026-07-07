@@ -15,12 +15,34 @@ from . import util
 
 MODALITIES = ("pistola", "carabina")
 
-# Categorias padrão (pistola tem hierarquia; carabina é geral).
+# Modalidades (tipos) padrão: (code, label, sort)
+DEFAULT_MODALITIES = [
+    ("pistola", "Pistola", 1),
+    ("carabina", "Carabina", 2),
+]
+
+# Categorias padrão:
+# (name, modality, rank, max_shooters, promote_n, demote_n, entry)
 DEFAULT_CATEGORIES = [
-    ("Combatente", "pistola", 1),
-    ("Guerreiro", "pistola", 2),
-    ("Veterano de Guerra", "pistola", 3),
-    ("Geral", "carabina", 1),
+    ("Combatente", "pistola", 1, None, 3, 0, 1),
+    ("Guerreiro", "pistola", 2, 8, 3, 3, 0),
+    ("Veterano de Guerra", "pistola", 3, 8, 0, 3, 0),
+    ("Geral", "carabina", 1, None, 0, 0, 1),
+]
+
+# Permissões existentes no sistema: (código, rótulo)
+PERMISSIONS = [
+    ("inscrever", "📝 Inscrever / editar inscrições"),
+    ("resultados", "🎯 Lançar e consultar resultados"),
+    ("atiradores", "👤 Gerenciar atiradores"),
+]
+
+# Cargos padrão: (code, label, builtin, permissões iniciais)
+# ROs NÃO têm mais a permissão de inscrever (pedido do clube).
+DEFAULT_ROLES = [
+    ("admin", "Administrador", 1, []),          # admin tem tudo, implícito
+    ("ro", "RO (linha de tiro)", 1, ["resultados"]),
+    ("recepcao", "Recepção", 1, ["inscrever", "atiradores"]),
 ]
 
 SCHEMA = """
@@ -41,12 +63,38 @@ CREATE TABLE IF NOT EXISTS access_requests (
 );
 
 CREATE TABLE IF NOT EXISTS categories (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    name      TEXT NOT NULL,
-    modality  TEXT NOT NULL,                   -- 'pistola' | 'carabina'
-    rank      INTEGER NOT NULL,                -- maior = categoria mais alta
-    active    INTEGER NOT NULL DEFAULT 1,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT NOT NULL,
+    modality     TEXT NOT NULL,                -- código da modalidade (tipo)
+    rank         INTEGER NOT NULL,             -- maior = categoria mais alta
+    active       INTEGER NOT NULL DEFAULT 1,
+    max_shooters INTEGER,                      -- NULL = sem limite
+    promote_n    INTEGER NOT NULL DEFAULT 0,   -- quantos sobem por mês
+    demote_n     INTEGER NOT NULL DEFAULT 0,   -- quantos descem por mês
+    entry        INTEGER NOT NULL DEFAULT 0,   -- 1 = categoria inicial do tipo
     UNIQUE(name, modality)
+);
+
+-- Modalidades ("tipos": pistola, carabina, ... criáveis pelo admin)
+CREATE TABLE IF NOT EXISTS modalities (
+    code   TEXT PRIMARY KEY,
+    label  TEXT NOT NULL,
+    sort   INTEGER NOT NULL DEFAULT 99,
+    active INTEGER NOT NULL DEFAULT 1
+);
+
+-- Cargos da equipe (criáveis pelo admin) e suas permissões
+CREATE TABLE IF NOT EXISTS roles (
+    code    TEXT PRIMARY KEY,
+    label   TEXT NOT NULL,
+    builtin INTEGER NOT NULL DEFAULT 0,
+    active  INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS role_permissions (
+    role_code TEXT NOT NULL,
+    perm      TEXT NOT NULL,
+    PRIMARY KEY (role_code, perm)
 );
 
 CREATE TABLE IF NOT EXISTS shooters (
@@ -138,7 +186,9 @@ def init_db() -> None:
     conn = get_conn()
     try:
         conn.executescript(SCHEMA)
-        # Migração: garante colunas novas em bancos antigos
+        # ------------------------------------------------------------------
+        # Migração: garante colunas novas em bancos antigos (NUNCA apaga dados)
+        # ------------------------------------------------------------------
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(shooters)")]
         if "name_key" not in cols:
             conn.execute("ALTER TABLE shooters ADD COLUMN name_key TEXT")
@@ -150,14 +200,84 @@ def init_db() -> None:
                 "WHERE name_key IS NULL OR name_key=''").fetchall():
             conn.execute("UPDATE shooters SET name_key=? WHERE id=?",
                          (util.norm_name(r["name"]), r["id"]))
-        # Carga inicial de categorias
-        for name, modality, rank in DEFAULT_CATEGORIES:
+
+        # --- categorias: novas colunas (limite, sobem, descem, inicial) ---
+        cat_cols = [r["name"] for r in conn.execute("PRAGMA table_info(categories)")]
+        legacy_cats = "promote_n" not in cat_cols
+        if legacy_cats:
+            conn.execute("ALTER TABLE categories ADD COLUMN max_shooters INTEGER")
+            conn.execute("ALTER TABLE categories ADD COLUMN promote_n INTEGER "
+                         "NOT NULL DEFAULT 0")
+            conn.execute("ALTER TABLE categories ADD COLUMN demote_n INTEGER "
+                         "NOT NULL DEFAULT 0")
+            conn.execute("ALTER TABLE categories ADD COLUMN entry INTEGER "
+                         "NOT NULL DEFAULT 0")
+
+        # Carga inicial de categorias (só cria as que não existem)
+        for name, modality, rank, mx, up, down, entry in DEFAULT_CATEGORIES:
             conn.execute(
-                "INSERT OR IGNORE INTO categories(name, modality, rank, active) "
-                "VALUES (?,?,?,1)", (name, modality, rank))
+                "INSERT OR IGNORE INTO categories"
+                "(name, modality, rank, active, max_shooters, promote_n, "
+                "demote_n, entry) VALUES (?,?,?,1,?,?,?,?)",
+                (name, modality, rank, mx, up, down, entry))
+
+        if legacy_cats:
+            # Banco antigo: aplica a configuração que reproduz o comportamento
+            # que já valia (Veterano/Guerreiro limite 8; 3 sobem / 3 descem).
+            for name, modality, rank, mx, up, down, entry in DEFAULT_CATEGORIES:
+                conn.execute(
+                    "UPDATE categories SET max_shooters=?, promote_n=?, "
+                    "demote_n=?, entry=? WHERE name=? AND modality=?",
+                    (mx, up, down, entry, name, modality))
+            # Categorias fora do padrão: define valores coerentes
+            mods = [r["modality"] for r in conn.execute(
+                "SELECT DISTINCT modality FROM categories")]
+            for mod in mods:
+                cats = conn.execute(
+                    "SELECT * FROM categories WHERE modality=? AND active=1 "
+                    "ORDER BY rank", (mod,)).fetchall()
+                if not cats:
+                    continue
+                # garante uma categoria inicial por modalidade
+                has_entry = any(c["entry"] for c in cats)
+                if not has_entry:
+                    conn.execute("UPDATE categories SET entry=1 WHERE id=?",
+                                 (cats[0]["id"],))
+
+        # --- modalidades (tipos) ---
+        for code, label, sort in DEFAULT_MODALITIES:
+            conn.execute(
+                "INSERT OR IGNORE INTO modalities(code,label,sort,active) "
+                "VALUES (?,?,?,1)", (code, label, sort))
+        # registra modalidades que só existem nas categorias (bancos antigos)
+        for r in conn.execute("SELECT DISTINCT modality FROM categories"):
+            conn.execute(
+                "INSERT OR IGNORE INTO modalities(code,label,sort,active) "
+                "VALUES (?,?, 99, 1)", (r["modality"], r["modality"].title()))
+
+        # --- cargos e permissões (só semeia quando o cargo NÃO existe,
+        #     para não desfazer configurações feitas pelo admin) ---
+        for code, label, builtin, perms in DEFAULT_ROLES:
+            exists = conn.execute("SELECT 1 FROM roles WHERE code=?",
+                                  (code,)).fetchone()
+            if not exists:
+                conn.execute(
+                    "INSERT INTO roles(code,label,builtin,active) VALUES (?,?,?,1)",
+                    (code, label, builtin))
+                for p in perms:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO role_permissions(role_code,perm) "
+                        "VALUES (?,?)", (code, p))
+
         conn.commit()
         ensure_current_month(conn)
         conn.commit()
+        # atualiza os rótulos em cache (modalidades e cargos)
+        from . import texts
+        texts.set_modality_labels({r["code"]: r["label"] for r in
+                                   conn.execute("SELECT * FROM modalities")})
+        texts.set_role_labels({r["code"]: r["label"] for r in
+                               conn.execute("SELECT * FROM roles")})
     finally:
         conn.close()
 
@@ -214,6 +334,129 @@ def list_admin_ids(conn) -> List[int]:
     return list(ids)
 
 
+def rename_staff(conn, telegram_id: int, name: str) -> None:
+    conn.execute("UPDATE staff SET name=? WHERE telegram_id=?",
+                 (name.strip(), telegram_id))
+
+
+def set_staff_role(conn, telegram_id: int, role_code: str) -> None:
+    conn.execute("UPDATE staff SET role=? WHERE telegram_id=?",
+                 (role_code, telegram_id))
+
+
+def get_staff_any(conn, telegram_id: int) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT * FROM staff WHERE telegram_id=?",
+                        (telegram_id,)).fetchone()
+
+
+# ----------------------------------------------------------------------------
+# CARGOS / PERMISSÕES
+# ----------------------------------------------------------------------------
+def list_roles(conn) -> List[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM roles WHERE active=1 ORDER BY builtin DESC, label"
+    ).fetchall()
+
+
+def get_role(conn, code: str) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT * FROM roles WHERE code=?", (code,)).fetchone()
+
+
+def add_role(conn, label: str) -> str:
+    """Cria um cargo novo; devolve o código gerado a partir do nome."""
+    base = util.norm_name(label).lower().replace(" ", "_")[:20] or "cargo"
+    code = base
+    n = 2
+    while conn.execute("SELECT 1 FROM roles WHERE code=?", (code,)).fetchone():
+        code = f"{base}{n}"
+        n += 1
+    conn.execute("INSERT INTO roles(code,label,builtin,active) VALUES (?,?,0,1)",
+                 (code, label.strip()))
+    return code
+
+
+def rename_role(conn, code: str, label: str) -> None:
+    conn.execute("UPDATE roles SET label=? WHERE code=?", (label.strip(), code))
+
+
+def role_member_count(conn, code: str) -> int:
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM staff WHERE role=? AND status='ativo'",
+        (code,)).fetchone()["n"]
+
+
+def delete_role(conn, code: str) -> None:
+    conn.execute("DELETE FROM role_permissions WHERE role_code=?", (code,))
+    conn.execute("DELETE FROM roles WHERE code=?", (code,))
+
+
+def role_perms(conn, code: str) -> set:
+    if code == "admin":
+        return {p for p, _ in PERMISSIONS}
+    return {r["perm"] for r in conn.execute(
+        "SELECT perm FROM role_permissions WHERE role_code=?", (code,))}
+
+
+def toggle_role_perm(conn, code: str, perm: str) -> bool:
+    """Liga/desliga uma permissão do cargo. Devolve o novo estado."""
+    has = conn.execute(
+        "SELECT 1 FROM role_permissions WHERE role_code=? AND perm=?",
+        (code, perm)).fetchone()
+    if has:
+        conn.execute("DELETE FROM role_permissions WHERE role_code=? AND perm=?",
+                     (code, perm))
+        return False
+    conn.execute("INSERT INTO role_permissions(role_code,perm) VALUES (?,?)",
+                 (code, perm))
+    return True
+
+
+# ----------------------------------------------------------------------------
+# MODALIDADES (tipos)
+# ----------------------------------------------------------------------------
+def list_modalities(conn) -> List[sqlite3.Row]:
+    return conn.execute(
+        "SELECT * FROM modalities WHERE active=1 ORDER BY sort, label"
+    ).fetchall()
+
+
+def get_modality(conn, code: str) -> Optional[sqlite3.Row]:
+    return conn.execute("SELECT * FROM modalities WHERE code=?",
+                        (code,)).fetchone()
+
+
+def add_modality(conn, label: str) -> str:
+    base = util.norm_name(label).lower().replace(" ", "_")[:20] or "tipo"
+    code = base
+    n = 2
+    while conn.execute("SELECT 1 FROM modalities WHERE code=?",
+                       (code,)).fetchone():
+        code = f"{base}{n}"
+        n += 1
+    nxt = conn.execute(
+        "SELECT COALESCE(MAX(sort),0)+1 AS s FROM modalities").fetchone()["s"]
+    conn.execute("INSERT INTO modalities(code,label,sort,active) VALUES (?,?,?,1)",
+                 (code, label.strip(), nxt))
+    return code
+
+
+def rename_modality(conn, code: str, label: str) -> None:
+    conn.execute("UPDATE modalities SET label=? WHERE code=?",
+                 (label.strip(), code))
+
+
+def modality_in_use(conn, code: str) -> bool:
+    q = conn.execute(
+        "SELECT (SELECT COUNT(*) FROM categories WHERE modality=?) + "
+        "(SELECT COUNT(*) FROM enrollments WHERE modality=?) AS n",
+        (code, code)).fetchone()
+    return q["n"] > 0
+
+
+def delete_modality(conn, code: str) -> None:
+    conn.execute("DELETE FROM modalities WHERE code=?", (code,))
+
+
 # ----------------------------------------------------------------------------
 # CATEGORIAS
 # ----------------------------------------------------------------------------
@@ -231,14 +474,90 @@ def get_category(conn, category_id: int) -> Optional[sqlite3.Row]:
                         (category_id,)).fetchone()
 
 
-def add_category(conn, name: str, modality: str) -> int:
+def add_category(conn, name: str, modality: str, max_shooters: int = None,
+                 promote_n: int = 0, demote_n: int = 0) -> int:
     row = conn.execute(
         "SELECT COALESCE(MAX(rank),0)+1 AS r FROM categories WHERE modality=?",
         (modality,)).fetchone()
     cur = conn.execute(
-        "INSERT INTO categories(name,modality,rank,active) VALUES (?,?,?,1)",
-        (name, modality, row["r"]))
-    return cur.lastrowid
+        "INSERT INTO categories(name,modality,rank,active,max_shooters,"
+        "promote_n,demote_n,entry) VALUES (?,?,?,1,?,?,?,0)",
+        (name, modality, row["r"], max_shooters, promote_n, demote_n))
+    cid = cur.lastrowid
+    # se for a única categoria da modalidade, vira a inicial
+    n = conn.execute("SELECT COUNT(*) AS n FROM categories "
+                     "WHERE modality=? AND active=1", (modality,)).fetchone()["n"]
+    if n == 1:
+        conn.execute("UPDATE categories SET entry=1 WHERE id=?", (cid,))
+    return cid
+
+
+def update_category(conn, category_id: int, name: str = None,
+                    max_shooters=..., promote_n: int = None,
+                    demote_n: int = None) -> None:
+    if name is not None:
+        conn.execute("UPDATE categories SET name=? WHERE id=?",
+                     (name.strip(), category_id))
+    if max_shooters is not ...:
+        conn.execute("UPDATE categories SET max_shooters=? WHERE id=?",
+                     (max_shooters, category_id))
+    if promote_n is not None:
+        conn.execute("UPDATE categories SET promote_n=? WHERE id=?",
+                     (promote_n, category_id))
+    if demote_n is not None:
+        conn.execute("UPDATE categories SET demote_n=? WHERE id=?",
+                     (demote_n, category_id))
+
+
+def set_entry_category(conn, category_id: int) -> None:
+    """Define a categoria inicial da modalidade (desmarca as demais)."""
+    cat = get_category(conn, category_id)
+    conn.execute("UPDATE categories SET entry=0 WHERE modality=?",
+                 (cat["modality"],))
+    conn.execute("UPDATE categories SET entry=1 WHERE id=?", (category_id,))
+
+
+def move_category_rank(conn, category_id: int, direction: str) -> bool:
+    """Sobe/desce a categoria na hierarquia (troca de rank com a vizinha)."""
+    cat = get_category(conn, category_id)
+    if not cat:
+        return False
+    if direction == "up":
+        other = conn.execute(
+            "SELECT * FROM categories WHERE modality=? AND active=1 AND rank>? "
+            "ORDER BY rank LIMIT 1", (cat["modality"], cat["rank"])).fetchone()
+    else:
+        other = conn.execute(
+            "SELECT * FROM categories WHERE modality=? AND active=1 AND rank<? "
+            "ORDER BY rank DESC LIMIT 1", (cat["modality"], cat["rank"])).fetchone()
+    if not other:
+        return False
+    conn.execute("UPDATE categories SET rank=? WHERE id=?",
+                 (other["rank"], cat["id"]))
+    conn.execute("UPDATE categories SET rank=? WHERE id=?",
+                 (cat["rank"], other["id"]))
+    return True
+
+
+def category_in_use(conn, category_id: int) -> int:
+    """Quantos registros (inscrições/atiradores/histórico) usam a categoria."""
+    q = conn.execute(
+        "SELECT (SELECT COUNT(*) FROM enrollments WHERE category_id=?) + "
+        "(SELECT COUNT(*) FROM shooter_modality WHERE category_id=?) + "
+        "(SELECT COUNT(*) FROM month_category WHERE category_id=?) AS n",
+        (category_id, category_id, category_id)).fetchone()
+    return q["n"]
+
+
+def category_member_count(conn, category_id: int) -> int:
+    """Quantos atiradores estão ATUALMENTE nesta categoria."""
+    return conn.execute(
+        "SELECT COUNT(*) AS n FROM shooter_modality WHERE category_id=?",
+        (category_id,)).fetchone()["n"]
+
+
+def delete_category(conn, category_id: int) -> None:
+    conn.execute("DELETE FROM categories WHERE id=?", (category_id,))
 
 
 # ----------------------------------------------------------------------------
@@ -357,12 +676,18 @@ def set_shooter_category(conn, shooter_id: int, modality: str,
         (shooter_id, modality, category_id))
 
 
-def default_category_id(conn, modality: str) -> int:
-    """Categoria de entrada: a mais baixa (rank menor) da modalidade."""
+def default_category_id(conn, modality: str) -> Optional[int]:
+    """Categoria inicial configurada pelo admin; se não houver,
+    usa a mais baixa (rank menor) da modalidade."""
+    row = conn.execute(
+        "SELECT id FROM categories WHERE active=1 AND modality=? AND entry=1 "
+        "LIMIT 1", (modality,)).fetchone()
+    if row:
+        return row["id"]
     row = conn.execute(
         "SELECT id FROM categories WHERE active=1 AND modality=? ORDER BY rank LIMIT 1",
         (modality,)).fetchone()
-    return row["id"]
+    return row["id"] if row else None
 
 
 # ----------------------------------------------------------------------------
