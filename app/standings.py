@@ -278,6 +278,135 @@ def monthly_table(conn, month_id: int, modality: str, category_id: int,
     }
 
 
+def stage_best_times_general(conn, stage_id: int,
+                             modality: str) -> Dict[int, Optional[float]]:
+    """{shooter_id: melhor_tempo_final ou None} numa etapa/modalidade,
+    considerando TODAS as categorias juntas (ranking geral)."""
+    enrolls = conn.execute(
+        "SELECT * FROM enrollments WHERE stage_id=? AND modality=?",
+        (stage_id, modality)).fetchall()
+    out: Dict[int, Optional[float]] = {}
+    for e in enrolls:
+        br = db.best_run(conn, e["id"])
+        t = br["final_time"] if br else None
+        if e["shooter_id"] in out and out[e["shooter_id"]] is not None:
+            if t is not None:
+                out[e["shooter_id"]] = min(out[e["shooter_id"]], t)
+        else:
+            out[e["shooter_id"]] = t
+    return out
+
+
+def month_shooter_category_name(conn, month_id: int, shooter_id: int,
+                                modality: str) -> str:
+    """Nome da categoria do atirador naquele mês (para a tag do geral)."""
+    row = conn.execute(
+        "SELECT category_id FROM month_category "
+        "WHERE month_id=? AND shooter_id=? AND modality=?",
+        (month_id, shooter_id, modality)).fetchone()
+    cid = row["category_id"] if row else None
+    if not cid:
+        cid = db.get_shooter_category(conn, shooter_id, modality)
+    if not cid:
+        r = conn.execute(
+            "SELECT e.category_id FROM enrollments e "
+            "JOIN stages s ON s.id=e.stage_id "
+            "WHERE s.month_id=? AND e.shooter_id=? AND e.modality=? "
+            "ORDER BY e.id DESC LIMIT 1",
+            (month_id, shooter_id, modality)).fetchone()
+        cid = r["category_id"] if r else None
+    if cid:
+        c = db.get_category(conn, cid)
+        return c["name"] if c else ""
+    return ""
+
+
+def monthly_table_general(conn, month_id: int, modality: str) -> Dict[str, Any]:
+    """
+    Ranking GERAL da modalidade no mês: TODAS as subcategorias disputando
+    juntas. A pontuação é recalculada no bolo geral — o menor tempo da
+    modalidade em cada etapa vale 100 pontos, independentemente da categoria.
+    Cada linha mantém o rótulo da categoria do atirador.
+    """
+    stages = month_held_stages(conn, month_id)
+    best_n = monthly_best_n(conn, month_id)
+
+    stage_pts: Dict[int, Dict[int, float]] = {}
+    stage_time: Dict[int, Dict[int, float]] = {}
+    scored_in: Dict[int, set] = {}
+    for s in stages:
+        times = stage_best_times_general(conn, s["id"], modality)
+        stage_pts[s["id"]] = stage_points(times)
+        stage_time[s["id"]] = times
+        scored_in[s["id"]] = {sid for sid, t in times.items() if t is not None}
+
+    parts = conn.execute(
+        "SELECT DISTINCT e.shooter_id FROM enrollments e "
+        "JOIN stages st ON st.id=e.stage_id "
+        "WHERE st.month_id=? AND e.modality=?",
+        (month_id, modality)).fetchall()
+    shooters: set = {r["shooter_id"] for r in parts}
+    for s in stages:
+        shooters |= scored_in[s["id"]]
+
+    rows = []
+    for sid in shooters:
+        cells = []
+        pts_list = []
+        for s in stages:
+            if sid in scored_in[s["id"]]:
+                p = round(stage_pts[s["id"]][sid], 2)
+                t = stage_time[s["id"]][sid]
+                cells.append({"points": p, "time": f"{t:.2f}",
+                              "present": True, "dropped": False})
+                pts_list.append(stage_pts[s["id"]][sid])
+            else:
+                cells.append({"points": None, "time": None,
+                              "present": False, "dropped": False})
+        total = monthly_score(pts_list, best_n)
+        n_drop = max(0, len(pts_list) - best_n)
+        if n_drop > 0:
+            present_idx = [i for i, c in enumerate(cells) if c["present"]]
+            present_idx.sort(key=lambda i: cells[i]["points"])
+            for i in present_idx[:n_drop]:
+                cells[i]["dropped"] = True
+        sh = db.get_shooter(conn, sid)
+        rows.append({
+            "shooter_id": sid, "name": sh["name"] if sh else "?",
+            "category": month_shooter_category_name(conn, month_id, sid,
+                                                    modality),
+            "cells": cells, "total": round(total, 2),
+        })
+    rows.sort(key=lambda r: (-r["total"], r["name"]))
+    for i, r in enumerate(rows, 1):
+        r["pos"] = i
+    return {
+        "stages": [{"number": s["number"], "date": s["date"]} for s in stages],
+        "rows": rows,
+        "best_n": best_n,
+    }
+
+
+def stage_classification_general(conn, stage_id: int,
+                                 modality: str) -> List[Dict[str, Any]]:
+    """Classificação GERAL de uma etapa (todas as categorias juntas)."""
+    times = stage_best_times_general(conn, stage_id, modality)
+    pts = stage_points(times)
+    rows = []
+    for sid, p in pts.items():
+        sh = db.get_shooter(conn, sid)
+        rows.append({
+            "shooter_id": sid,
+            "name": sh["name"] if sh else "?",
+            "time": times[sid],
+            "points": round(p, 2),
+        })
+    rows.sort(key=lambda r: (-r["points"], r["name"]))
+    for i, r in enumerate(rows, 1):
+        r["pos"] = i
+    return rows
+
+
 def monthly_table_combined(conn, month_id: int, modality: str,
                            categories) -> Dict[str, Any]:
     """Junta várias categorias numa só tabela (ex.: Pistola Geral), mantendo o

@@ -1801,15 +1801,18 @@ async def admin_stage_create_with_date(update, context, text):
 
 
 async def admin_stage_close(update, context, stage_id):
-    # 1) Gera o PDF do resultado da etapa ANTES de fechar — se der problema,
-    #    o fechamento acontece do mesmo jeito.
-    pdf_bytes, pdf_name = None, None
+    # 1) Gera os PDFs ANTES de fechar — se der problema, fecha do mesmo jeito.
+    docs = []  # [(bytes, nome, legenda)]
     try:
         from . import report
         conn = db.get_conn()
         try:
-            pdf_bytes = report.build_stage_pdf(conn, stage_id)
-            pdf_name = report.stage_pdf_filename(conn, stage_id)
+            docs.append((report.build_stage_pdf(conn, stage_id),
+                         report.stage_pdf_filename(conn, stage_id),
+                         "📄 Resultado da etapa — Guerra Clube de Tiro"))
+            docs.append((report.build_stage_general_pdf(conn, stage_id),
+                         report.stage_general_pdf_filename(conn, stage_id),
+                         "🏆 Ranking geral da etapa — todas as categorias"))
         finally:
             conn.close()
     except Exception as e:
@@ -1822,20 +1825,21 @@ async def admin_stage_close(update, context, stage_id):
     finally:
         conn.close()
     await admin_stage_detail(update, context, stage_id)
-    # 3) Envia o PDF do resultado da etapa
-    if pdf_bytes:
+    # 3) Envia os PDFs
+    import io
+    for pdf_bytes, pdf_name, caption in docs:
         try:
-            import io
             doc = io.BytesIO(pdf_bytes)
             doc.name = pdf_name
             await context.bot.send_document(
                 update.effective_chat.id, document=doc, filename=pdf_name,
-                caption="📄 Resultado da etapa — Guerra Clube de Tiro")
+                caption=caption)
         except Exception as e:
             log.warning("Falha ao enviar PDF da etapa: %s", e)
             await context.bot.send_message(
                 update.effective_chat.id,
-                "⚠️ A etapa foi fechada, mas não consegui enviar o PDF.")
+                f"⚠️ A etapa foi fechada, mas não consegui enviar o PDF "
+                f"{pdf_name}.")
 
 
 async def admin_stage_reopen(update, context, stage_id):
@@ -1949,14 +1953,18 @@ async def admin_month_close(update, context):
 async def admin_month_confirm(update, context):
     moves = context.user_data.get("month_moves", [])
     month_id = context.user_data.get("month_id")
-    # 1) Gera o PDF ANTES de fechar — nunca pode quebrar o fechamento
-    pdf_bytes, pdf_name = None, None
+    # 1) Gera os PDFs ANTES de fechar — nunca pode quebrar o fechamento
+    docs = []  # [(bytes, nome, legenda)]
     try:
         from . import report
         conn = db.get_conn()
         try:
-            pdf_bytes = report.build_month_pdf(conn, month_id, moves)
-            pdf_name = report.month_pdf_filename(conn, month_id)
+            docs.append((report.build_month_pdf(conn, month_id, moves),
+                         report.month_pdf_filename(conn, month_id),
+                         "📄 Resultado mensal — Guerra Clube de Tiro"))
+            docs.append((report.build_month_general_pdf(conn, month_id),
+                         report.month_general_pdf_filename(conn, month_id),
+                         "🏆 Ranking geral do mês — todas as categorias"))
         finally:
             conn.close()
     except Exception as e:
@@ -1974,23 +1982,24 @@ async def admin_month_confirm(update, context):
     context.user_data.clear()
     await update.callback_query.edit_message_text(
         "✅ *Mês fechado!* Categorias atualizadas e novo mês aberto."
-        + ("\n\n📄 Enviando o PDF do resultado mensal..." if pdf_bytes else ""),
+        + ("\n\n📄 Enviando os PDFs do resultado mensal..." if docs else ""),
         reply_markup=kb([[btn("🏠 Menu", "home")]]),
         parse_mode=ParseMode.MARKDOWN)
-    # 3) Envia o PDF do resultado mensal
-    if pdf_bytes:
+    # 3) Envia os PDFs
+    import io
+    for pdf_bytes, pdf_name, caption in docs:
         try:
-            import io
             doc = io.BytesIO(pdf_bytes)
             doc.name = pdf_name
             await context.bot.send_document(
                 update.effective_chat.id, document=doc, filename=pdf_name,
-                caption="📄 Resultado mensal — Guerra Clube de Tiro")
+                caption=caption)
         except Exception as e:
             log.warning("Falha ao enviar PDF do mês: %s", e)
             await context.bot.send_message(
                 update.effective_chat.id,
-                "⚠️ O mês foi fechado, mas não consegui enviar o PDF.")
+                f"⚠️ O mês foi fechado, mas não consegui enviar o PDF "
+                f"{pdf_name}.")
 
 
 # ============================================================================
@@ -2244,16 +2253,20 @@ async def sh_cat_set(update, context, sid, cat_id):
     conn = db.get_conn()
     try:
         cat = db.get_category(conn, cat_id)
-        db.set_shooter_category(conn, sid, cat["modality"], cat_id)
+        moved = db.change_shooter_category_open_month(conn, sid,
+                                                      cat["modality"], cat_id)
         conn.commit()
         n = db.category_member_count(conn, cat_id)
         over = cat["max_shooters"] and n > cat["max_shooters"]
     finally:
         conn.close()
     msg = f"Categoria alterada para {cat['name']}."
+    if moved:
+        msg += (f" {moved} inscrição(ões) do mês aberto foram movidas junto. "
+                "Meses fechados não mudam.")
     if over:
         msg += f" ⚠️ A categoria passou do limite ({n}/{cat['max_shooters']})."
-    await update.callback_query.answer(msg, show_alert=bool(over))
+    await update.callback_query.answer(msg, show_alert=bool(over or moved))
     await sh_detail(update, context, sid)
 
 

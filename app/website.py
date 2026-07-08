@@ -116,9 +116,12 @@ def build_sections(conn, month_id):
         mcode = mod["code"]
         mlabel = texts.modality_label(mcode)
         cats = sorted(db.list_categories(conn, mcode), key=lambda c: -c["rank"])
-        # Tabela "Geral" da modalidade (junta as categorias) quando há mais de 1
+        # Tabela "Geral" da modalidade quando há mais de 1 categoria:
+        # disputa entre TODAS as subcategorias com pontuação recalculada no
+        # bolo geral (menor tempo da modalidade = 100), mantendo a tag da
+        # categoria de cada atirador.
         if len(cats) > 1:
-            combined = st.monthly_table_combined(conn, month_id, mcode, cats)
+            combined = st.monthly_table_general(conn, month_id, mcode)
             if combined["rows"]:
                 for r in combined["rows"]:
                     r["cat_short"] = cat_short(r.get("category", ""))

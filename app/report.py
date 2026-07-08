@@ -186,3 +186,121 @@ def stage_pdf_filename(conn, stage_id: int) -> str:
     month = db.get_month(conn, stage["month_id"])
     return (f"Resultado_{stage['number']}a_Etapa_"
             f"{MONTH_PT[month['month']]}_{month['year']}.pdf")
+
+
+# ----------------------------------------------------------------------------
+# PDFs de RANKING GERAL (disputa entre todas as subcategorias)
+# ----------------------------------------------------------------------------
+def _cat_tag(name: str) -> str:
+    from .website import cat_short
+    return cat_short(name or "")
+
+
+def build_month_general_pdf(conn, month_id: int) -> bytes:
+    """Ranking geral MENSAL: uma seção por modalidade (Pistola Geral,
+    Carabina Geral, e qualquer tipo criado no futuro), com a pontuação
+    recalculada entre todas as subcategorias juntas."""
+    month = db.get_month(conn, month_id)
+    month_label = f"{MONTH_PT[month['month']]} {month['year']}"
+
+    sections = []
+    for mod in db.list_modalities(conn):
+        table = st.monthly_table_general(conn, month_id, mod["code"])
+        if not table["rows"]:
+            continue
+        for r in table["rows"]:
+            r["cat_tag"] = _cat_tag(r.get("category", ""))
+        sections.append({
+            "modality_label": texts.modality_label(mod["code"]),
+            "category": "Geral",
+            "table": table,
+            "rows": table["rows"],
+            "flow": (len(table["rows"]) > 14),
+        })
+
+    return _render("general_report.html",
+                   club=config.CLUB_NAME,
+                   month_label=month_label,
+                   sections=sections,
+                   generated=datetime.now().strftime("%d/%m/%Y %H:%M"),
+                   fmt_date=_fmt_date)
+
+
+def month_general_pdf_filename(conn, month_id: int) -> str:
+    month = db.get_month(conn, month_id)
+    return f"Ranking_Geral_{MONTH_PT[month['month']]}_{month['year']}.pdf"
+
+
+def build_stage_general_pdf(conn, stage_id: int) -> bytes:
+    """Ranking geral da ETAPA: uma seção por modalidade, com todas as
+    subcategorias disputando juntas (menor tempo da modalidade = 100)."""
+    stage = db.get_stage(conn, stage_id)
+    month = db.get_month(conn, stage["month_id"])
+    stage_label = f"{stage['number']}ª Etapa"
+    month_label = f"{MONTH_PT[month['month']]} {month['year']}"
+
+    sections = []
+    for mod in db.list_modalities(conn):
+        enrolls = conn.execute(
+            "SELECT e.*, s.name AS shooter_name FROM enrollments e "
+            "JOIN shooters s ON s.id=e.shooter_id "
+            "WHERE e.stage_id=? AND e.modality=? ORDER BY s.name",
+            (stage_id, mod["code"])).fetchall()
+        if not enrolls:
+            continue
+        cat_names = {}
+        for e in enrolls:
+            c = db.get_category(conn, e["category_id"])
+            cat_names[e["shooter_id"]] = c["name"] if c else ""
+        scored, dq_rows, pending = [], [], []
+        times = {}
+        for e in enrolls:
+            br = db.best_run(conn, e["id"])
+            if br:
+                times[e["shooter_id"]] = br["final_time"]
+                scored.append({
+                    "shooter_id": e["shooter_id"],
+                    "name": e["shooter_name"],
+                    "cat_tag": _cat_tag(cat_names[e["shooter_id"]]),
+                    "category": cat_names[e["shooter_id"]],
+                    "raw": f"{br['raw_time']:.2f}",
+                    "pens": _pen_label(br),
+                    "final": f"{br['final_time']:.2f}",
+                })
+            elif db.any_dq(conn, e["id"]):
+                dq_rows.append({"name": e["shooter_name"],
+                                "cat_tag": _cat_tag(cat_names[e["shooter_id"]])})
+            else:
+                pending.append({"name": e["shooter_name"],
+                                "cat_tag": _cat_tag(cat_names[e["shooter_id"]])})
+        if not (scored or dq_rows):
+            continue
+        pts = stage_points(times)
+        for r in scored:
+            r["points"] = f"{pts.get(r['shooter_id'], 0.0):.2f}"
+        scored.sort(key=lambda r: float(r["final"]))
+        for i, r in enumerate(scored, 1):
+            r["pos"] = i
+        sections.append({
+            "modality_label": texts.modality_label(mod["code"]),
+            "category": "Geral",
+            "rows": scored,
+            "dq_rows": dq_rows,
+            "pending": pending,
+            "flow": (len(scored) + len(dq_rows) > 14),
+        })
+
+    return _render("stage_general_report.html",
+                   club=config.CLUB_NAME,
+                   stage_label=stage_label,
+                   stage_date=_fmt_date_full(stage["date"]),
+                   month_label=month_label,
+                   sections=sections,
+                   generated=datetime.now().strftime("%d/%m/%Y %H:%M"))
+
+
+def stage_general_pdf_filename(conn, stage_id: int) -> str:
+    stage = db.get_stage(conn, stage_id)
+    month = db.get_month(conn, stage["month_id"])
+    return (f"Ranking_Geral_{stage['number']}a_Etapa_"
+            f"{MONTH_PT[month['month']]}_{month['year']}.pdf")

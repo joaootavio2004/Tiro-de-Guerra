@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face{font-family:'Oswald'; src:url('static/fonts/Oswald-Regular.ttf'); font-weight:400}
+  @font-face{font-family:'Oswald'; src:url('static/fonts/Oswald-Medium.ttf'); font-weight:500}
+  @font-face{font-family:'Oswald'; src:url('static/fonts/Oswald-SemiBold.ttf'); font-weight:600}
+  @font-face{font-family:'Oswald'; src:url('static/fonts/Oswald-Bold.ttf'); font-weight:700}
+  @font-face{font-family:'Inter'; src:url('static/fonts/Inter-Regular.ttf'); font-weight:400}
+  @font-face{font-family:'Inter'; src:url('static/fonts/Inter-SemiBold.ttf'); font-weight:600}
+
+  *{ box-sizing:border-box; }
+  :root{
+    --ink:#0a130f; --surface:#10201a; --surface2:#152a20; --line:#22402f;
+    --gold:#cabe72; --gold-bright:#e2d588; --khaki:#9aa05f;
+    --text:#ece9da; --muted:#8a9a8d; --down:#ff6b5e;
+  }
+  @page{ size:A4; margin:12mm 11mm; }
+  html, body{ background:var(--ink); }
+  .bg{ position:fixed; top:-12mm; left:-11mm; width:210mm; height:297mm;
+       background:var(--ink); z-index:-1; }
+  body{ margin:0; font-family:'Inter',sans-serif; color:var(--text);
+        font-size:9.2px; }
+
+  .head{ display:flex; align-items:center; gap:11px; padding-bottom:10px;
+         border-bottom:1px solid var(--line); margin-bottom:14px; }
+  .head img{ height:40px; }
+  .head .t{ flex:1; }
+  .head .club{ font-family:'Oswald'; font-weight:700; letter-spacing:.14em;
+    text-transform:uppercase; font-size:14px; line-height:1; }
+  .head .club small{ display:block; color:var(--gold); font-size:8px;
+    letter-spacing:.34em; margin-top:3px; }
+  .head .ttl{ text-align:right; }
+  .head .ttl .ey{ font-family:'Oswald'; text-transform:uppercase;
+    letter-spacing:.28em; font-size:8px; color:var(--gold); }
+  .head .ttl .mo{ font-family:'Oswald'; font-weight:700; text-transform:uppercase;
+    font-size:22px; line-height:1; }
+  .head .ttl .mo span{ color:var(--gold); }
+  .head .ttl .dt{ color:var(--muted); font-size:8px; margin-top:3px; }
+
+  .cat{ margin-bottom:13px; break-inside:avoid; }
+  .cat.flow{ break-inside:auto; }
+  .cat-head{ display:flex; align-items:baseline; gap:8px;
+    border-left:3px solid var(--gold); padding:2px 0 6px 9px; }
+  .cat-head .mod{ font-family:'Oswald'; letter-spacing:.24em; text-transform:uppercase;
+    font-size:8px; color:var(--gold); }
+  .cat-head h2{ font-family:'Oswald'; font-weight:600; text-transform:uppercase;
+    letter-spacing:.03em; font-size:16px; margin:0; }
+  .cat-head .rule{ margin-left:auto; color:var(--muted); font-size:8px; }
+
+  table{ width:100%; border-collapse:collapse; }
+  thead{ display:table-header-group; }
+  thead th{ font-family:'Oswald'; font-weight:500; text-transform:uppercase;
+    letter-spacing:.06em; font-size:7.6px; color:var(--muted);
+    padding:5px 5px; text-align:center; border-bottom:1px solid var(--line);
+    background:var(--surface2); }
+  thead th.ath{ text-align:left; }
+  thead th.tot{ color:var(--gold); }
+  tbody tr{ break-inside:avoid; }
+  tbody td{ padding:4.5px 5px; text-align:center; border-bottom:1px solid rgba(34,64,47,.5);
+    background:var(--surface); font-variant-numeric:tabular-nums; }
+  td.pos{ width:24px; }
+  td.ath{ text-align:left; font-weight:600; }
+  td.pen{ color:var(--khaki); font-size:8.4px; }
+  td.tot{ font-family:'Oswald'; font-weight:600; font-size:11px; color:var(--gold-bright); }
+
+  .badge{ display:inline-block; width:15px; height:15px; line-height:15px;
+    border-radius:50%; font-family:'Oswald'; font-weight:600; font-size:8px;
+    color:var(--muted); background:var(--surface2); }
+  tr.top1 .badge{ background:var(--gold); color:var(--ink); }
+  tr.top2 .badge{ background:#c7ccd1; color:var(--ink); }
+  tr.top3 .badge{ background:#bd8a5a; color:var(--ink); }
+  tr.top1 td.ath{ color:var(--gold-bright); }
+  tr.dq td{ color:var(--down); }
+  tr.dq td.ath{ font-weight:400; }
+  tr.noshow td{ color:var(--muted); }
+  tr.noshow td.ath{ font-weight:400; }
+  tr.noshow .badge{ background:transparent; color:#43564a; }
+
+  .cat-tag{ display:inline-block; margin-left:5px; padding:1px 5px;
+    border:1px solid var(--line); border-radius:3px; font-family:'Oswald';
+    font-weight:500; font-size:6.6px; letter-spacing:.08em; color:var(--khaki);
+    vertical-align:1px; }
+  .foot{ margin-top:10px; padding-top:8px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:7.6px; display:flex; }
+  .foot .r{ margin-left:auto; }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+
+  <div class="head">
+    <img src="static/logo.png" alt="">
+    <div class="t">
+      <div class="club">Guerra<small>Clube de Tiro</small></div>
+    </div>
+    <div class="ttl">
+      <div class="ey">Ranking Geral da Etapa</div>
+      <div class="mo">{{ stage_label }} <span>{{ month_label }}</span></div>
+      {% if stage_date %}<div class="dt">Realizada em {{ stage_date }}</div>{% endif %}
+    </div>
+  </div>
+
+  {% for s in sections %}
+  <div class="cat {% if s.flow %}flow{% endif %}">
+    <div class="cat-head">
+      <div class="mod">{{ s.modality_label }}</div>
+      <h2>{{ s.category }}</h2>
+      <div class="rule">Todas as categorias juntas · menor tempo geral vale 100 pontos</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="pos">#</th>
+          <th class="ath">Atirador</th>
+          <th>Tempo</th>
+          <th>Penalidades</th>
+          <th>Tempo final</th>
+          <th class="tot">Pontos</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in s.rows %}
+        <tr class="{% if r.pos<=3 %}top{{ r.pos }}{% endif %}">
+          <td class="pos"><span class="badge">{{ r.pos }}</span></td>
+          <td class="ath">{{ r.name }}{% if r.cat_tag %}<span class="cat-tag" title="{{ r.category }}">{{ r.cat_tag }}</span>{% endif %}</td>
+          <td>{{ r.raw }}s</td>
+          <td class="pen">{{ r.pens }}</td>
+          <td>{{ r.final }}s</td>
+          <td class="tot">{{ r.points }}</td>
+        </tr>
+        {% endfor %}
+        {% for r in s.dq_rows %}
+        <tr class="dq">
+          <td class="pos"><span class="badge">—</span></td>
+          <td class="ath">{{ r.name }}{% if r.cat_tag %}<span class="cat-tag" title="{{ r.category }}">{{ r.cat_tag }}</span>{% endif %}</td>
+          <td>—</td>
+          <td class="pen">DQ</td>
+          <td>—</td>
+          <td class="tot">0.00</td>
+        </tr>
+        {% endfor %}
+        {% for r in s.pending %}
+        <tr class="noshow">
+          <td class="pos"><span class="badge">—</span></td>
+          <td class="ath">{{ r.name }}{% if r.cat_tag %}<span class="cat-tag" title="{{ r.category }}">{{ r.cat_tag }}</span>{% endif %}</td>
+          <td>—</td>
+          <td class="pen">sem tempo lançado</td>
+          <td>—</td>
+          <td class="tot">0.00</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+
+  <div class="foot">
+    <span>{{ club }} · IDSC</span>
+    <span class="r">Gerado em {{ generated }}</span>
+  </div>
+
+</body>
+</html>
