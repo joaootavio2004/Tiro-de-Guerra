@@ -63,18 +63,20 @@ def count_held_stages(conn, month_id: int, modality: str = None) -> int:
 
 
 def monthly_best_n(conn, month_id: int, modality: str = None) -> int:
-    """Quantas etapas contam no mês: todas as realizadas menos a pior (mín. 1).
+    """Quantas etapas contam no mês: as MELHORES, no máximo 3.
+    Meses curtos descartam a pior (mín. 1).
+    Ex.: 3 etapas -> contam 2; 4 etapas -> contam 3; 5 etapas -> contam 3.
     Vale igual para pistola e carabina."""
     held = len(month_held_stages(conn, month_id))
-    return max(1, held - 1)
+    return min(3, max(1, held - 1))
 
 
 def monthly_classification(conn, month_id: int, modality: str,
                            category_id: int, best_n: int = None) -> List[Dict[str, Any]]:
     """
     Classificação mensal de uma categoria.
-    Conta todas as etapas realizadas no mês MENOS a pior (descarte da pior).
-    Ex.: 4 etapas -> contam 3; 5 etapas -> contam 4; 3 etapas -> contam 2.
+    Contam as melhores etapas do mês (máximo 3; meses curtos descartam a pior).
+    Ex.: 3 etapas -> contam 2; 4 etapas -> contam 3; 5 etapas -> contam 3.
     """
     if best_n is None:
         best_n = monthly_best_n(conn, month_id)
