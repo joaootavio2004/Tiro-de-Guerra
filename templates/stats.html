@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ club }} — Estatísticas do atirador</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+{% include "_head.html" %}
+<style>
+  .sbox{margin:26px 0 8px}
+  .sbox form{position:relative}
+  .sbox input{width:100%; border:1px solid var(--line); border-radius:999px; background:var(--surface);
+    padding:14px 18px 14px 48px; font-family:"Inter",sans-serif; font-size:16px; color:var(--text); text-transform:uppercase}
+  .sbox input:focus{outline:2px solid var(--gold)}
+  .sbox form::before{content:"⌕"; position:absolute; left:18px; top:50%; transform:translateY(-55%); font-size:22px; color:var(--gold)}
+  .hint{color:var(--muted); font-size:13px; margin:8px 4px 0}
+  .res{display:flex; flex-direction:column; gap:8px; margin-top:16px}
+  .res a{display:block; text-decoration:none; background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    padding:12px 16px; font-family:"Oswald",sans-serif; font-weight:600; text-transform:uppercase; font-size:16px}
+  .res a:hover{border-color:var(--gold)}
+  .who{margin:26px 0 6px}
+  .who h1{font-family:"Oswald",sans-serif; font-weight:700; text-transform:uppercase; font-size:clamp(26px,5vw,40px); line-height:1; margin:0}
+  .who p{color:var(--muted); margin:8px 0 0; font-size:14px}
+  .kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin:16px 0 22px}
+  .kpi{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px 14px}
+  .kpi .v{font-family:"Oswald",sans-serif; font-weight:700; font-size:26px; line-height:1; color:var(--gold-bright)}
+  .kpi .l{color:var(--muted); font-size:11px; margin-top:6px; letter-spacing:.1em; text-transform:uppercase}
+  .run{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px 18px; margin-bottom:12px}
+  .run .top{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap}
+  .run .when{font-family:"Oswald",sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:11.5px; color:var(--khaki)}
+  .run .cat{color:var(--muted); font-size:12.5px}
+  .run .ft{margin-left:auto; font-family:"Oswald",sans-serif; font-weight:700; font-size:30px; line-height:1; color:var(--gold-bright); font-variant-numeric:tabular-nums}
+  .run .ft small{font-size:14px; font-weight:500; color:var(--muted); margin-left:6px}
+  .run .ft.dq{color:#f0a0a0}
+  .facts{display:flex; gap:16px; flex-wrap:wrap; margin:10px 0 0; color:var(--muted); font-size:13px}
+  .facts b{color:var(--text); font-weight:600; font-variant-numeric:tabular-nums}
+  .shots{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px}
+  .shot{font-family:"Oswald",sans-serif; font-size:14px; border:1px solid var(--line); border-radius:9px; padding:6px 9px;
+    background:var(--surface2); font-variant-numeric:tabular-nums; line-height:1.1}
+  .shot small{display:block; font-size:10px; color:var(--muted); letter-spacing:.08em; margin-top:2px}
+  .shot.first{border-color:var(--khaki)} .shot.last{border-color:var(--gold)}
+  .noshots{color:var(--muted); font-size:12.5px; margin-top:8px}
+  .empty{padding:40px 10px; text-align:center; color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap">
+    <a class="brand" href="/"><img src="/static/logo.png" alt="{{ club }}"><span class="name">Guerra<small>Clube de Tiro</small></span></a>
+    <span class="spacer"></span>
+    <a class="btn-link" href="/" style="font-family:'Oswald',sans-serif; font-size:13px; letter-spacing:.08em; text-transform:uppercase; text-decoration:none; color:var(--gold)">‹ Classificação</a>
+  </div>
+</header>
+<main class="wrap">
+  <div class="sbox">
+    <form method="get" action="/estatisticas"><input type="search" name="q" value="{{ q }}" placeholder="Nome do atirador" autocomplete="off" {% if not shooter %}autofocus{% endif %}></form>
+    <div class="hint">Estatísticas por passada: primeiro disparo, split de cada tiro, quantidade, tempo total e penalidades. {{ n_shooters }} atiradores cadastrados.</div>
+  </div>
+
+  {% if shooter %}
+  <div class="who"><h1>{{ shooter.name }}</h1><p>{{ runs|length }} passada{{ 's' if runs|length != 1 }} registrada{{ 's' if runs|length != 1 }}</p></div>
+  {% set with_shots = runs|selectattr('shots')|list %}
+  {% set valid = runs|rejectattr('dq')|selectattr('final')|list %}
+  <div class="kpis">
+    <div class="kpi"><div class="v">{% if valid %}{{ '%.2f'|format(valid|map(attribute='final')|min) }}s{% else %}—{% endif %}</div><div class="l">Melhor tempo final</div></div>
+    <div class="kpi"><div class="v">{% if with_shots %}{{ '%.2f'|format(with_shots|map(attribute='first_shot')|min) }}s{% else %}—{% endif %}</div><div class="l">Melhor 1º disparo</div></div>
+    <div class="kpi"><div class="v">{{ runs|selectattr('dq')|list|length }}</div><div class="l">DQ</div></div>
+    <div class="kpi"><div class="v">{{ with_shots|length }}</div><div class="l">Passadas com timer</div></div>
+  </div>
+  {% for r in runs %}
+  <div class="run">
+    <div class="top">
+      <span class="when">{{ r.stage_number }}ª etapa · {{ r.month_label }} · {{ fmt_date(r.stage_date) }}</span>
+      <span class="cat">{{ r.modality_label }} · {{ r.category }}</span>
+      <span class="ft{% if r.dq %} dq{% endif %}">{% if r.dq %}DQ{% else %}{{ '%.2f'|format(r.final) }}s{% if r.pen_secs %}<small>{{ '%.2f'|format(r.raw) }} + {{ r.pen_secs }}s</small>{% endif %}{% endif %}</span>
+    </div>
+    <div class="facts">
+      <span>Disparos <b>{{ r.n_shots or '—' }}</b></span>
+      <span>1º disparo <b>{% if r.first_shot %}{{ '%.2f'|format(r.first_shot) }}s{% else %}—{% endif %}</b></span>
+      <span>Penalidades <b>{% if r.pen2 or r.pen5 or r.pen10 %}{% if r.pen2 %}{{ r.pen2 }}×2s {% endif %}{% if r.pen5 %}{{ r.pen5 }}×5s {% endif %}{% if r.pen10 %}{{ r.pen10 }}×10s{% endif %}{% else %}nenhuma{% endif %}</b></span>
+      {% if r.segments and r.segments > 1 %}<span>Acionamentos <b>{{ r.segments }}</b></span>{% endif %}
+    </div>
+    {% if r.shots %}
+    <div class="shots">
+      {% for t in r.shots %}<div class="shot{% if loop.first %} first{% endif %}{% if loop.last %} last{% endif %}">{{ '%.2f'|format(t) }}<small>#{{ loop.index }} · split {{ '%.2f'|format(r.splits[loop.index0]) }}</small></div>{% endfor %}
+    </div>
+    {% else %}<div class="noshots">Passada lançada sem o timer conectado — sem detalhe de disparos.</div>{% endif %}
+  </div>
+  {% endfor %}
+  {% elif q %}
+  <div class="res">
+    {% for s in results %}<a href="/estatisticas?id={{ s.id }}">{{ s.name }}</a>{% else %}<div class="empty">Nenhum atirador com esse nome.</div>{% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">Digite o nome para ver as passadas.</div>
+  {% endif %}
+</main>
+{% include "_footer.html" %}
+</body>
+</html>

@@ -280,6 +280,9 @@ def init_db() -> None:
         conn.commit()
         ensure_current_month(conn)
         conn.commit()
+        # --- área interna (/interno): tabelas e colunas novas, só aditivas ---
+        from . import webdb
+        webdb.migrate(conn)
         # atualiza os rótulos em cache (modalidades e cargos)
         from . import texts
         texts.set_modality_labels({r["code"]: r["label"] for r in

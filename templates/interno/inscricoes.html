@@ -1,0 +1,113 @@
+{% extends "interno/_base.html" %}
+{% block title %}Inscrições{% endblock %}
+{% block head %}
+<style>
+  .res{margin-top:8px; display:flex; flex-direction:column; gap:6px}
+  .res .item{cursor:default}
+  .newbox{margin-top:10px; border:1px dashed var(--line); border-radius:12px; padding:12px}
+  .toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--gold); color:var(--ink);
+    border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s}
+  .toast.show{opacity:1} .toast.err{background:#c0392b; color:#fff}
+</style>
+{% endblock %}
+{% block content %}
+<h1 class="pg">Inscrições</h1>
+<p class="lead">{% if open_stage %}{{ open_stage_label }} · {{ fmt_date(open_stage.date) }} — marque quem está presente. Arma e quantidade de passadas não se escolhem mais aqui: o RO define a arma na hora, e cada tempo lançado conta como uma passada.{% else %}Não há etapa aberta.{% endif %}</p>
+
+<div class="sub-tabs">
+  <button class="on" data-t="tabPres" onclick="tab(this)">📝 Presença</button>
+  <button data-t="tabBill" onclick="tab(this)">💰 Passadas (cobrança)</button>
+</div>
+
+<section id="tabPres">
+  <div class="box">
+    <h2>Buscar atirador</h2>
+    <div class="search"><input type="search" id="q" placeholder="Digite parte do nome" autocomplete="off" {% if not open_stage %}disabled{% endif %}></div>
+    <div class="res" id="res"></div>
+    {% if can_create %}
+    <div class="newbox" id="newbox">
+      <div class="muted small" style="margin-bottom:8px">Não achou? Cadastre e já marque presença:</div>
+      <div class="frow">
+        <div><label>Nome completo</label><input type="text" id="nName" style="text-transform:uppercase" autocomplete="off"></div>
+        <div><label>CPF (opcional)</label><input type="text" id="nCpf" inputmode="numeric" placeholder="000.000.000-00"></div>
+        <div><button class="btn btn-gold btn-block" onclick="createShooter(false)">➕ Cadastrar e inscrever</button></div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  <div class="box">
+    <h2>Presentes na etapa <span class="tag" id="cnt">{{ participants|length }}</span></h2>
+    <div class="list" id="list"></div>
+  </div>
+</section>
+
+<section id="tabBill" class="hide">
+  <div class="box">
+    <h2>Passadas finalizadas por atirador</h2>
+    <p class="muted small" style="margin:0 0 10px">Conta cada tempo lançado pelo RO (inclusive DQ). Atualiza sozinho.</p>
+    <table class="plain" id="bill"><thead><tr><th>Atirador</th>{% for m in modalities %}<th style="text-align:center">{{ m.label }}</th>{% endfor %}<th style="text-align:center">Total</th></tr></thead><tbody></tbody></table>
+  </div>
+</section>
+<div class="toast" id="toast"></div>
+{% endblock %}
+{% block scripts %}
+<script>
+"use strict";
+var MODS = {{ modalities|tojson }};
+var PARTS = {{ participants|tojson }};
+function $(id){return document.getElementById(id);}
+function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
+var tT=null; function toast(s,e){var m=$('toast');m.textContent=s;m.className='toast show'+(e?' err':'');clearTimeout(tT);tT=setTimeout(function(){m.classList.remove('show');},3500);}
+function tab(b){ document.querySelectorAll('.sub-tabs button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
+  ['tabPres','tabBill'].forEach(function(id){ $(id).classList.toggle('hide', id!==b.dataset.t); }); if(b.dataset.t==='tabBill') renderBill(); }
+async function api(url, body){ var r=await fetch(url, body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});
+  if(r.status===401){location.href='/interno/login?next=/interno/inscricoes';throw new Error('login');} var d=await r.json().catch(function(){return {};}); if(!r.ok) throw new Error(d.detail||('erro '+r.status)); return d; }
+
+function renderList(){
+  $('cnt').textContent = PARTS.length;
+  $('list').innerHTML = PARTS.map(function(p){
+    return '<div class="item'+(p.runs?' done':'')+'"><div class="who"><div class="nm">'+esc(p.name)+'</div><div class="meta">'+(p.runs?p.runs+' passada'+(p.runs>1?'s':'')+' lançada'+(p.runs>1?'s':''):'aguardando')+'</div></div>'+
+      (p.runs?'':'<button class="btn btn-sm btn-danger" onclick="toggle('+p.id+',true)">Remover</button>')+'</div>';
+  }).join('') || '<div class="muted small">Ninguém marcado ainda.</div>';
+}
+var lastQ='', searchT=null;
+$('q').addEventListener('input', function(){ clearTimeout(searchT); var v=this.value; searchT=setTimeout(function(){ search(v); }, 180); });
+async function search(v){
+  if(!v.trim()){ $('res').innerHTML=''; return; }
+  try{
+    var rows = await api('/interno/api/atiradores/busca?q='+encodeURIComponent(v));
+    $('res').innerHTML = rows.map(function(r){
+      return '<div class="item"><div class="who"><div class="nm">'+esc(r.name)+'</div><div class="meta">'+(r.cpf||'sem CPF')+'</div></div>'+
+        (r.checked_in?'<span class="tag ok">presente</span>':'<button class="btn btn-sm btn-gold" onclick="toggle('+r.id+',false)">Marcar presença</button>')+'</div>';
+    }).join('') || '<div class="muted small">Nenhum cadastro com esse nome.</div>';
+    if($('nName') && !rows.length) $('nName').value = v.toUpperCase();
+  }catch(e){}
+}
+async function toggle(id, remove){
+  try{ var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id, remove:remove}); PARTS=d.participants; renderList(); toast(remove?'Removido.':'Presença marcada ✔'); search($('q').value); }
+  catch(e){ toast(e.message, true); }
+}
+async function createShooter(force){
+  var name=$('nName').value.trim(), cpf=$('nCpf').value.trim();
+  if(name.length<3){ toast('Nome muito curto.', true); return; }
+  try{
+    var d = await api('/interno/api/atiradores/novo', {name:name, cpf:cpf, checkin:true, force:force});
+    if(!d.ok && d.duplicate){ if(confirm('Já existe "'+d.duplicate.name+'". Marcar presença dele em vez de cadastrar de novo?')){ toggle(d.duplicate.id,false); } else if(confirm('Cadastrar mesmo assim como pessoa diferente?')){ createShooter(true); } return; }
+    $('nName').value=''; $('nCpf').value=''; $('q').value=''; $('res').innerHTML='';
+    var p = await api('/interno/api/linha/dados').catch(function(){return null;});
+    if(p && p.participants){ PARTS=p.participants; } else { PARTS.push({id:d.id,name:d.name,runs:0,by_modality:{}}); }
+    renderList(); toast(d.name+' cadastrado e presente ✔');
+  }catch(e){ toast(e.message, true); }
+}
+async function renderBill(){
+  try{ var rows = await api('/interno/api/inscricoes/cobranca');
+    $('bill').querySelector('tbody').innerHTML = rows.map(function(p){
+      return '<tr><td>'+esc(p.name)+'</td>'+MODS.map(function(m){ return '<td class="num" style="text-align:center">'+(p.by_modality[m.code]||0)+'</td>'; }).join('')+
+        '<td class="num" style="text-align:center"><b>'+p.runs+'</b></td></tr>';
+    }).join('') || '<tr><td colspan="9" class="muted">Ninguém na etapa.</td></tr>';
+  }catch(e){}
+}
+renderList();
+setInterval(function(){ if(!$('tabBill').classList.contains('hide')) renderBill(); else api('/interno/api/linha/dados').then(function(p){ if(p.participants){PARTS=p.participants; renderList();} }).catch(function(){}); }, 20000);
+</script>
+{% endblock %}

@@ -8,6 +8,9 @@ services:
       - BOT_TOKEN=${BOT_TOKEN}
       - ADMIN_IDS=${ADMIN_IDS}
       - CLUB_NAME=${CLUB_NAME:-GUERRA Clube de Tiro}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - SITE_URL=${SITE_URL:-https://tirodeguerra.com.br}
       - TZ=${TZ:-America/Sao_Paulo}
       - PORT=8000
       - DB_PATH=/app/data/tiro_guerra.db

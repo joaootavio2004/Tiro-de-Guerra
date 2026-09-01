@@ -1,0 +1,39 @@
+{% extends "interno/_base.html" %}
+{% block title %}Atiradores{% endblock %}
+{% block content %}
+<h1 class="pg">Atiradores</h1>
+<p class="lead">Cadastro geral. Toque no atirador para editar nome/CPF, categoria, mesclar ou excluir.</p>
+<div class="grid2">
+  <div class="box">
+    <h2>Buscar</h2>
+    <form method="get" action="/interno/atiradores"><div class="search"><input type="search" name="q" value="{{ q }}" placeholder="Parte do nome" autocomplete="off"></div></form>
+  </div>
+  <form class="box" method="post" action="/interno/atiradores/novo">
+    <h2>Novo atirador</h2>
+    <div class="frow">
+      <div><label>Nome completo</label><input type="text" name="name" style="text-transform:uppercase" required></div>
+      <div><label>CPF (opcional)</label><input type="text" name="cpf" inputmode="numeric"></div>
+      <div><button class="btn btn-gold btn-block">➕ Cadastrar</button></div>
+    </div>
+  </form>
+</div>
+{% if dups %}
+<div class="box" style="border-color:#7a6a2a">
+  <h2>⚠️ Possíveis duplicados</h2>
+  {% for g in dups %}
+  <div class="small" style="margin-bottom:6px">{% for s in g %}<a href="/interno/atiradores/{{ s.id }}">{{ s.name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  {% endfor %}
+  <div class="muted small">Abra um deles e use "Mesclar" para juntar os históricos.</div>
+</div>
+{% endif %}
+<div class="box">
+  <h2>{{ total }} atirador{{ 'es' if total != 1 }}{% if q %} para "{{ q }}"{% endif %}</h2>
+  <div class="list">
+    {% for s in rows %}
+    <a class="item" href="/interno/atiradores/{{ s.id }}" style="text-decoration:none">
+      <div class="who"><div class="nm">{{ s.name }}</div><div class="meta">{{ fmt_cpf(s.cpf) if s.cpf else 'sem CPF' }}</div></div><span class="muted">›</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,424 @@
+{% extends "interno/_base.html" %}
+{% block title %}Linha de tiro{% endblock %}
+{% block head %}
+<style>
+  .devices{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px}
+  .dev{display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--line);
+    border-radius:999px; padding:6px 8px 6px 14px; font-size:12.5px; color:var(--muted)}
+  .dev b{color:var(--text); font-weight:600}
+  .screen{display:none} .screen.on{display:block}
+  .groups h3{font-family:"Oswald",sans-serif; font-weight:500; letter-spacing:.14em; text-transform:uppercase;
+    font-size:11.5px; color:var(--muted); margin:16px 0 8px}
+  .item.pick{cursor:pointer}
+  .item.pick:hover{border-color:var(--gold)}
+  .big-name{font-family:"Oswald",sans-serif; font-weight:700; text-transform:uppercase; font-size:30px; line-height:1.05; margin:0}
+  .chips{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0}
+  .chip{font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.06em; text-transform:uppercase; font-size:14px;
+    border:1px solid var(--line); border-radius:12px; padding:12px 16px; background:var(--surface2); color:var(--text); cursor:pointer;
+    flex:1; text-align:center; min-width:120px}
+  .chip small{display:block; font-family:"Inter",sans-serif; font-weight:400; text-transform:none; letter-spacing:0;
+    color:var(--muted); font-size:12px; margin-top:3px}
+  .chip.on{background:var(--gold); color:var(--ink); border-color:var(--gold)}
+  .chip.on small{color:rgba(10,19,15,.65)}
+  .confirm{background:var(--gold-soft); border:1px dashed var(--gold); border-radius:12px; padding:12px 14px; font-size:14px; margin:12px 0}
+  .actions{display:grid; gap:10px; margin-top:14px}
+  .clock{font-family:"Oswald",sans-serif; font-weight:700; font-size:64px; line-height:1; letter-spacing:.01em;
+    color:var(--gold-bright); font-variant-numeric:tabular-nums; text-align:center; margin:8px 0}
+  .clock small{font-size:22px; font-weight:600}
+  .state{text-align:center; font-family:"Oswald",sans-serif; letter-spacing:.2em; text-transform:uppercase; font-size:12px; color:var(--muted)}
+  .state.live{color:#9fd48a}
+  .shots{display:flex; flex-wrap:wrap; gap:6px; margin:14px 0; justify-content:center}
+  .shot{font-family:"Oswald",sans-serif; font-size:15px; border:1px solid var(--line); border-radius:10px; padding:7px 10px;
+    background:var(--surface2); cursor:pointer; font-variant-numeric:tabular-nums}
+  .shot small{display:block; font-size:10px; color:var(--muted); letter-spacing:.1em}
+  .shot.sel{border-color:var(--gold); background:var(--gold-soft)}
+  .shot.seg{border-left:3px solid var(--khaki)}
+  .pens{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin:12px 0}
+  .pen{background:var(--surface2); border:1px solid var(--line); border-radius:12px; padding:8px 4px; text-align:center; min-width:0}
+  .pen .l{font-family:"Oswald",sans-serif; letter-spacing:.12em; text-transform:uppercase; font-size:11px; color:var(--muted)}
+  .pen .v{font-family:"Oswald",sans-serif; font-weight:700; font-size:30px; line-height:1; margin:6px 0}
+  .pen .b{display:flex; gap:6px; justify-content:center}
+  .pen .b button{width:38px; height:36px; border-radius:10px; border:1px solid var(--line); background:var(--ink); color:var(--text); font-size:20px; cursor:pointer}
+  .final{background:var(--surface2); border:1px solid var(--line); border-radius:14px; padding:14px; text-align:center; margin:12px 0}
+  .final .l{font-family:"Oswald",sans-serif; letter-spacing:.16em; text-transform:uppercase; font-size:11px; color:var(--muted)}
+  .final .v{font-family:"Oswald",sans-serif; font-weight:700; font-size:44px; line-height:1; color:var(--gold-bright); margin-top:4px}
+  .final.dq .v{color:#f0a0a0}
+  .timein{font-family:"Oswald",sans-serif; font-size:30px; text-align:center; font-weight:700}
+  .runrow{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:12px;
+    background:var(--surface2); margin-bottom:8px}
+  .runrow .t{font-family:"Oswald",sans-serif; font-weight:700; font-size:22px; min-width:90px}
+  .runrow .m{flex:1; font-size:12.5px; color:var(--muted)}
+  .toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--gold); color:var(--ink);
+    border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s}
+  .toast.show{opacity:1}
+  .toast.err{background:#c0392b; color:#fff}
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="pg">Linha de tiro</h1>
+<p class="lead" id="stageLead">{% if open_stage %}{{ open_stage_label }} · {{ fmt_date(open_stage.date) }}{% else %}Não há etapa aberta.{% endif %}</p>
+
+<div class="devices">
+  <div class="dev"><span class="dot" id="tDot"></span><span>Timer: <b id="tSt">desconectado</b></span>
+    <button class="btn btn-sm btn-gold" id="tBtn">Conectar</button></div>
+  <div class="dev"><span class="dot" id="pDot"></span><span>Impressora: <b id="pSt">desconectada</b></span>
+    <button class="btn btn-sm btn-gold" id="pBtn">Conectar</button></div>
+</div>
+
+<!-- A · escolher atirador -->
+<section class="screen on" id="scrPick">
+  <div class="search"><input type="search" id="q" placeholder="Buscar atirador (parte do nome, sem acento)" autocomplete="off"></div>
+  <div class="groups" id="groups"><div class="muted small" style="padding:20px 0">Carregando…</div></div>
+</section>
+
+<!-- B · atirador selecionado -->
+<section class="screen" id="scrShooter">
+  <button class="btn btn-ghost btn-sm" onclick="go('pick')">‹ Voltar à lista</button>
+  <div class="box" style="margin-top:12px">
+    <h2 style="margin-bottom:6px">Atirador</h2>
+    <p class="big-name" id="shName">—</p>
+    <div id="shRunsBox" class="hide" style="margin-top:12px">
+      <button class="btn btn-block" id="shRunsBtn" onclick="toggleRuns()">📋 Resultados lançados</button>
+      <div id="shRuns" class="hide" style="margin-top:10px"></div>
+    </div>
+  </div>
+  <div class="box">
+    <h2>Armamento</h2>
+    <div class="chips" id="modChips"></div>
+    <div class="confirm" id="confirmTxt"></div>
+    <div class="actions">
+      <button class="btn btn-gold btn-lg btn-block" id="btnStart" onclick="startRun()">▶ Iniciar passada</button>
+      <button class="btn btn-block" onclick="manualRun()">✍️ Lançar tempo manualmente</button>
+    </div>
+    <p class="muted small" style="margin:12px 0 0" id="startHint"></p>
+  </div>
+</section>
+
+<!-- C · passada em andamento -->
+<section class="screen" id="scrRun">
+  <div class="box">
+    <p class="big-name" style="font-size:22px" id="runName">—</p>
+    <div class="muted small" id="runMeta"></div>
+    <div class="state" id="runState">aguardando o timer</div>
+    <div class="clock" id="clock">0.00<small>s</small></div>
+    <div class="shots" id="runShots"></div>
+    <div class="actions">
+      <button class="btn btn-gold btn-lg btn-block" onclick="finishRun()">🏁 Encerrar passada</button>
+      <div class="grid2">
+        <button class="btn btn-block" id="btnSum" onclick="sumRun()">➕ Somar passada</button>
+        <button class="btn btn-block btn-danger" onclick="restartRun()">🔁 Reiniciar</button>
+      </div>
+      <button class="btn btn-ghost btn-block" onclick="cancelRun()">✖ Cancelar (descartar)</button>
+    </div>
+  </div>
+</section>
+
+<!-- D · encerrar: penalidades e confirmação -->
+<section class="screen" id="scrFinish">
+  <div class="box">
+    <p class="big-name" style="font-size:22px" id="finName">—</p>
+    <div class="muted small" id="finMeta"></div>
+    <div id="finShotsWrap">
+      <h3 class="small muted" style="margin:14px 0 4px; text-transform:uppercase; letter-spacing:.12em">Disparos — toque no que vale como tempo de pista</h3>
+      <div class="shots" id="finShots"></div>
+    </div>
+    <label>Tempo de pista (s)</label>
+    <input type="number" step="0.01" min="0" id="finTime" class="timein" inputmode="decimal" placeholder="0.00">
+    <div class="pens">
+      <div class="pen"><div class="l">Pen. 2s</div><div class="v" id="p2">0</div><div class="b"><button onclick="pen(2,-1)">−</button><button onclick="pen(2,1)">+</button></div></div>
+      <div class="pen"><div class="l">Pen. 5s</div><div class="v" id="p5">0</div><div class="b"><button onclick="pen(5,-1)">−</button><button onclick="pen(5,1)">+</button></div></div>
+      <div class="pen"><div class="l">Pen. 10s</div><div class="v" id="p10">0</div><div class="b"><button onclick="pen(10,-1)">−</button><button onclick="pen(10,1)">+</button></div></div>
+    </div>
+    <button class="btn btn-block" id="dqBtn" onclick="toggleDQ()">⬜ Desqualificar (DQ)</button>
+    <div class="final" id="finalBox"><div class="l">Tempo final</div><div class="v" id="finalV">0.00s</div></div>
+    <div class="actions">
+      <button class="btn btn-gold btn-lg btn-block" id="btnSave" onclick="saveRun()">💾 Salvar passada</button>
+      <button class="btn btn-ghost btn-block" onclick="backToShooter()">‹ Voltar</button>
+    </div>
+  </div>
+</section>
+
+<!-- E · salvo -->
+<section class="screen" id="scrDone">
+  <div class="box" style="text-align:center">
+    <div class="tag ok" style="font-size:12px">Passada salva</div>
+    <p class="big-name" style="font-size:22px; margin-top:10px" id="doneName">—</p>
+    <div class="final"><div class="l" id="doneL">Tempo final</div><div class="v" id="doneV">—</div></div>
+    <div class="muted small" id="doneMeta"></div>
+    <div class="actions">
+      <button class="btn btn-gold btn-lg btn-block" id="btnPrint" onclick="printLast(this)">🖨️ Imprimir cupom</button>
+      <button class="btn btn-block" onclick="samePrint()">🔁 Nova passada do mesmo atirador</button>
+      <button class="btn btn-block" onclick="go('pick'); loadList()">👥 Próximo atirador</button>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/interno-print.js"></script>
+<script>
+"use strict";
+var MODS = {{ modalities|tojson }};
+var STAGE = {{ open_stage_label|tojson }};
+var CLUB = {{ club|tojson }};
+var SITE = {{ site_url|tojson }};
+var HAS_STAGE = {{ 'true' if open_stage else 'false' }};
+
+/* ============================ util ============================ */
+function $(id){ return document.getElementById(id); }
+function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+function norm(s){ return (s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
+function f2(x){ return (Math.round(x*100)/100).toFixed(2); }
+var toastT=null;
+function toast(s, err){ var m=$('toast'); m.textContent=s; m.className='toast show'+(err?' err':''); clearTimeout(toastT); toastT=setTimeout(function(){ m.classList.remove('show'); }, 3500); }
+function go(name){ document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('on'); });
+  $({pick:'scrPick', shooter:'scrShooter', run:'scrRun', finish:'scrFinish', done:'scrDone'}[name]).classList.add('on'); window.scrollTo({top:0}); }
+async function api(url, body){
+  var r = await fetch(url, body ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {cache:'no-store'});
+  if(r.status===401){ location.href='/interno/login?next=/interno/linha'; throw new Error('login'); }
+  var d = await r.json().catch(function(){ return {}; });
+  if(!r.ok) throw new Error(d.detail || ('erro '+r.status));
+  return d;
+}
+
+/* ============================ A · lista ============================ */
+var PARTS = [];
+async function loadList(){
+  if(!HAS_STAGE){ $('groups').innerHTML='<div class="muted">Não há etapa aberta.</div>'; return; }
+  try{ var d = await api('/interno/api/linha/dados'); PARTS = d.participants || []; renderList(); }catch(e){}
+}
+function renderList(){
+  var q = norm($('q').value);
+  var wait = PARTS.filter(function(p){ return !p.runs && (!q || p.name_key.indexOf(q)>=0); });
+  var done = PARTS.filter(function(p){ return p.runs && (!q || p.name_key.indexOf(q)>=0); });
+  function row(p){
+    var mods = Object.keys(p.by_modality||{}).map(function(k){ var m=MODS.find(function(x){return x.code===k;}); return (m?m.label:k)+' ×'+p.by_modality[k]; }).join(' · ');
+    return '<div class="item pick'+(p.runs?' done':'')+'" onclick="pickShooter('+p.id+')">'+
+      '<div class="who"><div class="nm">'+esc(p.name)+'</div><div class="meta">'+(p.runs?esc(mods):'ainda não passou')+'</div></div>'+
+      (p.runs?'<span class="tag ok">'+p.runs+' passada'+(p.runs>1?'s':'')+'</span>':'<span class="tag wait">aguardando</span>')+'</div>';
+  }
+  var h='';
+  if(!PARTS.length){ h='<div class="muted" style="padding:20px 0">Nenhum atirador inscrito na etapa. A recepção marca a presença em Inscrições.</div>'; }
+  else{
+    h += '<h3>⏳ Aguardando ('+wait.length+')</h3>'+(wait.length?'<div class="list">'+wait.map(row).join('')+'</div>':'<div class="muted small">ninguém</div>');
+    h += '<h3>✅ Já passaram ('+done.length+')</h3>'+(done.length?'<div class="list">'+done.map(row).join('')+'</div>':'<div class="muted small">ninguém</div>');
+  }
+  $('groups').innerHTML = h;
+}
+$('q').addEventListener('input', renderList);
+
+/* ============================ B · atirador ============================ */
+var SH = null, MOD = null, CATS = {}, SHRUNS = [];
+async function pickShooter(id){
+  try{
+    var d = await api('/interno/api/linha/atirador/'+id);
+    SH = d.shooter; CATS = d.categories; SHRUNS = d.runs || [];
+    $('shName').textContent = SH.name;
+    $('shRunsBox').classList.toggle('hide', !SHRUNS.length);
+    $('shRunsBtn').textContent = '📋 Resultados lançados ('+SHRUNS.length+')';
+    $('shRuns').classList.add('hide');
+    $('shRuns').innerHTML = SHRUNS.map(function(r,i){
+      var m = MODS.find(function(x){return x.code===r.modality;});
+      return '<div class="runrow"><div class="t">'+(r.dq?'DQ':f2(r.final)+'s')+'</div><div class="m">'+esc(m?m.label:r.modality)+' · '+esc(r.category)+
+        (r.pen_secs?' · +'+r.pen_secs+'s pen.':'')+(r.n_shots?' · '+r.n_shots+' disparos':'')+'</div>'+
+        '<button class="btn btn-sm" onclick="printRun(SHRUNS['+i+'], SH.name, this)">🖨️</button></div>';
+    }).join('');
+    // arma: mantém a última usada pelo atirador nesta etapa, senão a primeira
+    MOD = SHRUNS.length ? SHRUNS[0].modality : (MOD || MODS[0].code);
+    renderMods();
+    go('shooter');
+  }catch(e){ toast('Erro: '+e.message, true); }
+}
+function toggleRuns(){ $('shRuns').classList.toggle('hide'); }
+function renderMods(){
+  $('modChips').innerHTML = MODS.map(function(m){
+    var c = CATS[m.code];
+    return '<button class="chip'+(m.code===MOD?' on':'')+'" onclick="MOD=\''+m.code+'\';renderMods()">'+esc(m.label)+
+      '<small>'+(c?esc(c.name):'sem categoria')+'</small></button>';
+  }).join('');
+  var c = CATS[MOD];
+  var ml = (MODS.find(function(x){return x.code===MOD;})||{}).label || MOD;
+  $('confirmTxt').innerHTML = 'Confira: <b>'+esc(SH.name)+'</b> · '+esc(ml)+' · '+(c?esc(c.name):'<span style="color:#f0a0a0">sem categoria cadastrada</span>');
+  $('btnStart').disabled = !c;
+  $('startHint').textContent = timerChar ? 'O timer dispara o beep sozinho ao iniciar.' : 'Timer não conectado: ao iniciar, dê o start no próprio timer — os disparos serão lidos se ele conectar; ou lance o tempo manualmente.';
+}
+
+/* ============================ Timer Special Pie (BLE) ============================ */
+var timerDev=null, timerChar=null, timerWrite=null;
+var RUN = null;  // {shots:[{t,seg}], offset, seg, str, state:'armed'|'live'|'paused'}
+var clockTimer=null, clockBase=null;
+
+async function connectTimer(){
+  if(!navigator.bluetooth){ toast('Use o Chrome no Android para Bluetooth.', true); return; }
+  try{
+    timerDev = await navigator.bluetooth.requestDevice({filters:[{namePrefix:'SP'}], optionalServices:[0xfff0]});
+    timerDev.addEventListener('gattserverdisconnected', function(){ timerChar=null; setTimerUI(false); });
+    var server = await timerDev.gatt.connect();
+    var svc = await server.getPrimaryService(0xfff0);
+    timerChar = await svc.getCharacteristic(0xfff1);
+    timerWrite = await svc.getCharacteristic(0xfff2);
+    await timerChar.startNotifications();
+    timerChar.addEventListener('characteristicvaluechanged', onTimerPacket);
+    setTimerUI(true);
+    toast('Timer conectado: '+(timerDev.name||''));
+  }catch(e){ if(String(e).indexOf('cancelled')<0) toast('Timer: '+e.message, true); }
+}
+function setTimerUI(on){ $('tDot').className='dot'+(on?' on':''); $('tSt').textContent = on ? (timerDev.name||'conectado') : 'desconectado'; $('tBtn').textContent = on?'Trocar':'Conectar'; if(SH) renderMods(); }
+async function timerCmd(type){
+  if(!timerWrite) return false;
+  var pkt = new Uint8Array([0xF8,0xF9,type,0xF9,0xF8]);
+  try{ await timerWrite.writeValue(pkt); return true; }
+  catch(e){ try{ await timerWrite.writeValueWithoutResponse(pkt); return true; }catch(e2){ toast('Timer não respondeu: '+e2.message, true); return false; } }
+}
+function onTimerPacket(ev){
+  var b = new Uint8Array(ev.target.value.buffer);
+  if(b.length<5 || b[0]!==0xF8 || b[1]!==0xF9) return;
+  var type = b[2];
+  if(type===0x34){ var str=b[3]; onTimerStart(str); }
+  else if(type===0x36 && b.length>=10){ var t=((b[3]<<8)|b[4]) + b[5]/100; onTimerShot(t, b[6], b[7]); }
+  else if(type===0x18){ onTimerStop(b[3]); }
+}
+function onTimerStart(str){
+  if(!RUN){ // RO deu start no aparelho com atirador escolhido: entra na passada
+    if(SH && document.getElementById('scrShooter').classList.contains('on') && CATS[MOD]){ beginRun(); } else return;
+  }
+  if(RUN.state==='armed' || RUN.state==='paused'){ RUN.str=str; RUN.state='live'; RUN.seg+=1; startClock(); renderRun(); }
+}
+function onTimerShot(t, idx, str){
+  if(!RUN) return;
+  if(RUN.state==='armed'){ RUN.str=str; RUN.state='live'; RUN.seg+=1; startClock(); } // perdeu o pacote de start
+  if(RUN.state!=='live' || str!==RUN.str) return;
+  RUN.shots.push({t: RUN.offset + t, seg: RUN.seg, raw:t});
+  renderRun();
+}
+function onTimerStop(str){
+  if(!RUN || RUN.state!=='live' || str!==RUN.str) return;
+  // timer parou (pelo aparelho ou por comando nosso); mantém tela até o RO decidir
+  RUN.state='paused'; stopClock(); renderRun();
+}
+function startClock(){ clockBase = Date.now() - RUN.offset*1000; stopClock(); clockTimer=setInterval(tickClock, 50); }
+function stopClock(){ if(clockTimer){ clearInterval(clockTimer); clockTimer=null; } }
+function tickClock(){ var t=(Date.now()-clockBase)/1000; $('clock').innerHTML = f2(t)+'<small>s</small>'; }
+
+/* ============================ C · passada ============================ */
+function beginRun(){
+  RUN = {shots:[], offset:0, seg:0, str:null, state:'armed'};
+  $('runName').textContent = SH.name;
+  var ml=(MODS.find(function(x){return x.code===MOD;})||{}).label||MOD;
+  $('runMeta').textContent = ml+' · '+(CATS[MOD]?CATS[MOD].name:'');
+  $('clock').innerHTML='0.00<small>s</small>';
+  renderRun(); go('run');
+}
+async function startRun(){
+  beginRun();
+  if(timerWrite){ var ok = await timerCmd(0x34); if(!ok) toast('Não consegui acionar o timer. Dê o start no aparelho.', true); }
+  else toast('Timer não conectado — dê o start no aparelho.');
+}
+function renderRun(){
+  var st = $('runState');
+  st.className = 'state'+(RUN.state==='live'?' live':'');
+  st.textContent = RUN.state==='armed' ? 'aguardando o beep do timer' : RUN.state==='live' ? '● cronometrando' : 'timer parado — encerre, some ou reinicie';
+  var last = RUN.shots.length ? RUN.shots[RUN.shots.length-1].t : 0;
+  if(RUN.state!=='live') $('clock').innerHTML = f2(last)+'<small>s</small>';
+  $('runShots').innerHTML = RUN.shots.map(function(s,i){
+    var split = i ? s.t - RUN.shots[i-1].t : s.t;
+    return '<div class="shot'+(i && RUN.shots[i-1].seg!==s.seg?' seg':'')+'">'+f2(s.t)+'<small>#'+(i+1)+' · '+f2(split)+'</small></div>';
+  }).join('') || '<span class="muted small">nenhum disparo ainda</span>';
+  $('btnSum').textContent = RUN.state==='paused' ? '▶ Continuar (novo acionamento)' : '➕ Somar passada';
+}
+async function sumRun(){
+  // pane na pista: para o timer, guarda o tempo corrido e, no próximo start, continua somando
+  if(RUN.state==='live'){
+    await timerCmd(0x18);
+    RUN.state='paused'; stopClock();
+    var last = RUN.shots.length ? RUN.shots[RUN.shots.length-1].t : RUN.offset;
+    RUN.offset = last;
+    renderRun(); toast('Tempo guardado: '+f2(RUN.offset)+'s. Continue quando a pista liberar.');
+  } else if(RUN.state==='paused'){
+    var last2 = RUN.shots.length ? RUN.shots[RUN.shots.length-1].t : RUN.offset;
+    RUN.offset = last2; RUN.state='armed'; renderRun();
+    if(timerWrite){ await timerCmd(0x34); } else toast('Dê o start no aparelho.');
+  }
+}
+async function restartRun(){
+  if(!confirm('Reiniciar a passada? Os disparos serão descartados.')) return;
+  await timerCmd(0x18);
+  RUN = {shots:[], offset:0, seg:0, str:null, state:'armed'}; stopClock();
+  $('clock').innerHTML='0.00<small>s</small>'; renderRun();
+  if(timerWrite){ await new Promise(function(r){ setTimeout(r, 600); }); await timerCmd(0x34); }
+  else toast('Dê o start no aparelho.');
+}
+async function cancelRun(){
+  if(RUN && RUN.shots.length && !confirm('Descartar esta passada?')) return;
+  await timerCmd(0x18); RUN=null; stopClock(); go('shooter');
+}
+async function finishRun(){
+  if(RUN.state==='live') await timerCmd(0x18);
+  stopClock();
+  openFinish(RUN.shots.map(function(s){return s.t;}), RUN.seg||1);
+}
+function manualRun(){ RUN=null; openFinish([], 1); }
+
+/* ============================ D · encerrar ============================ */
+var FIN = null; // {shots, segments, time, p2,p5,p10, dq}
+function openFinish(shots, segments){
+  FIN = {shots:shots, segments:segments, time: shots.length ? shots[shots.length-1] : null, p2:0,p5:0,p10:0, dq:false, sel: shots.length-1};
+  $('finName').textContent = SH.name;
+  var ml=(MODS.find(function(x){return x.code===MOD;})||{}).label||MOD;
+  $('finMeta').textContent = ml+' · '+(CATS[MOD]?CATS[MOD].name:'')+(shots.length?' · '+shots.length+' disparos':' · lançamento manual');
+  $('finShotsWrap').classList.toggle('hide', !shots.length);
+  $('finTime').value = FIN.time!=null ? f2(FIN.time) : '';
+  $('p2').textContent='0'; $('p5').textContent='0'; $('p10').textContent='0';
+  renderFinShots(); renderFinal(); go('finish');
+  if(!shots.length) setTimeout(function(){ $('finTime').focus(); }, 100);
+}
+function renderFinShots(){
+  $('finShots').innerHTML = FIN.shots.map(function(t,i){
+    var split = i ? t - FIN.shots[i-1] : t;
+    return '<div class="shot'+(i===FIN.sel?' sel':'')+'" onclick="selShot('+i+')">'+f2(t)+'<small>#'+(i+1)+' · '+f2(split)+'</small></div>';
+  }).join('');
+}
+function selShot(i){ FIN.sel=i; FIN.time=FIN.shots[i]; $('finTime').value=f2(FIN.time); renderFinShots(); renderFinal(); }
+$('finTime').addEventListener('input', function(){ FIN.time = parseFloat(this.value.replace(',','.')); FIN.sel=-1; renderFinShots(); renderFinal(); });
+function pen(k,d){ var key='p'+k; FIN[key]=Math.max(0, FIN[key]+d); $(key).textContent=FIN[key]; renderFinal(); }
+function toggleDQ(){ FIN.dq=!FIN.dq; $('dqBtn').textContent = FIN.dq ? '🟥 DQ marcado (toque para desfazer)' : '⬜ Desqualificar (DQ)'; renderFinal(); }
+function renderFinal(){
+  var box=$('finalBox'); box.classList.toggle('dq', FIN.dq);
+  if(FIN.dq){ $('finalV').textContent='DQ'; return; }
+  var t = FIN.time; if(!(t>0)){ $('finalV').textContent='—'; return; }
+  $('finalV').textContent = f2(t + FIN.p2*2 + FIN.p5*5 + FIN.p10*10)+'s';
+}
+function backToShooter(){ go('shooter'); }
+var LAST=null;
+async function saveRun(){
+  if(!FIN.dq && !(FIN.time>0)){ toast('Informe o tempo de pista.', true); return; }
+  $('btnSave').disabled=true;
+  try{
+    var d = await api('/interno/api/linha/salvar', {shooter_id:SH.id, modality:MOD, raw_time:FIN.dq?null:FIN.time,
+      pen2:FIN.p2, pen5:FIN.p5, pen10:FIN.p10, dq:FIN.dq, shots:FIN.shots, segments:FIN.segments});
+    LAST = d; RUN=null;
+    $('doneName').textContent = d.shooter;
+    $('doneV').textContent = d.run.dq ? 'DQ' : f2(d.run.final)+'s';
+    var ml=(MODS.find(function(x){return x.code===MOD;})||{}).label||MOD;
+    $('doneMeta').innerHTML = esc(ml)+' · '+esc(d.run.category)+(d.pos?' · <b>'+d.pos+'º</b> de '+d.n_in_cat+' na categoria':'')+
+      (d.runs_total>1?' · vale a melhor: <b>'+f2(d.best)+'s</b>':'');
+    go('done');
+    if(printerChar) printLast($('btnPrint'));
+  }catch(e){ toast('Erro ao salvar: '+e.message, true); }
+  $('btnSave').disabled=false;
+}
+function samePrint(){ pickShooter(SH.id); }
+
+function printLast(btn){ if(LAST) printRun(LAST.run, LAST.shooter, btn); }
+
+/* ============================ init ============================ */
+$('tBtn').addEventListener('click', connectTimer);
+$('pBtn').addEventListener('click', connectPrinter);
+if('wakeLock' in navigator){ navigator.wakeLock.request('screen').catch(function(){});
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) navigator.wakeLock.request('screen').catch(function(){}); }); }
+loadList(); setInterval(function(){ if($('scrPick').classList.contains('on')) loadList(); }, 20000);
+</script>
+{% endblock %}

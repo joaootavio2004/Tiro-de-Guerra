@@ -1,112 +1,61 @@
-# ATUALIZAÇÃO — Tiro de Guerra (Coolify)
+# ATUALIZAÇÃO — Tiro de Guerra · Área interna (/interno)
 
-## ⚠️ LEIA ANTES DE FAZER O DEPLOY
+## O que muda
 
-O print do Coolify mostra **Persistent Storage: "No storage found"** no recurso
-*Tiro de Guerra*. Isso significa que o banco de dados (`/app/data/tiro_guerra.db`)
-está gravado **dentro do container** — e **todo redeploy apaga o container e os
-dados junto** (atiradores, resultados, equipe).
+O site ganha uma **área logada** em `tirodeguerra.com.br/interno` com tudo que o
+bot faz — e mais:
 
-Ou seja: antes de subir esta versão nova, é obrigatório **(1) fazer backup do
-banco atual** e **(2) criar o volume persistente**. Depois disso, os próximos
-deploys nunca mais perdem dados.
+- **Linha de tiro** com **timer Special Pie por Bluetooth** (start/stop pelo
+  celular, disparos lidos ao vivo) e **impressora térmica** (cupom por passada).
+  Funções da passada: **Reiniciar** (descarta e dispara o timer de novo),
+  **Somar** (pane na pista: guarda o tempo corrido e continua no próximo
+  acionamento) e **Encerrar** (penalidades + confirmação do tempo). Lançamento
+  manual continua disponível.
+- **Inscrições** viram só *presença na etapa*: sem arma e sem quantidade. O RO
+  escolhe a arma na hora; cada tempo lançado conta como uma passada.
+- **Passadas (cobrança)**: lista de atiradores com passadas finalizadas por arma.
+- **Estatísticas do atirador** no site público (`/estatisticas`): 1º disparo,
+  split de cada tiro, quantidade, tempo total e penalidades, por passada.
+- Cadastro de atiradores, lançamentos, classificação, etapas/mês (com PDFs e
+  fechamento), categorias e usuários/cargos.
 
-As migrações do banco são automáticas e não destrutivas: no primeiro boot desta
-versão, o código adiciona as colunas/tabelas novas (limites de categoria,
-quantos sobem/descem, categoria inicial, modalidades, cargos e permissões)
-preservando tudo o que já existe.
+O **bot continua funcionando** em paralelo com o mesmo banco.
 
----
+## Banco de dados — NADA é apagado
 
-## Passo a passo
+As migrações são aditivas (`CREATE TABLE IF NOT EXISTS` / `ADD COLUMN`):
+tabelas novas `web_users`, `web_sessions`, `stage_checkins`, `run_shots` e
+colunas novas em `runs` (`source`, `n_shots`, `first_shot`, `segments`,
+`created_by_user`). O volume persistente `/app/data` já existente é mantido.
+Faça backup do `tiro_guerra.db` antes do deploy, por precaução — como sempre.
 
-### 1. Backup do banco atual (via SSH no VPS da Hostinger)
+## Deploy no Coolify
 
-```bash
-ssh root@SEU_VPS
+1. **Variáveis de ambiente** (adicionar às existentes):
+   - `ADMIN_PASSWORD` = senha do primeiro login (usuário `admin`). Só é usada
+     se ainda não existir nenhum usuário; depois pode até apagar a variável.
+   - `SITE_URL` = `https://tirodeguerra.com.br` (QR do cupom). Opcional.
+2. Redeploy. Confira o log: aparece `Área interna: usuário 'admin' criado`.
+   Se não definir `ADMIN_PASSWORD`, a senha gerada aparece nesse log.
+3. Entre em `/interno`, troque a senha em **Usuários** e crie os logins da
+   recepção e dos ROs (cargos Recepção / RO, com as mesmas permissões do bot).
 
-# descobre o nome do container do Tiro de Guerra
-docker ps | grep -i tiro
+## No dia da etapa
 
-# copia o banco para fora do container
-docker cp NOME_DO_CONTAINER:/app/data/tiro_guerra.db /root/tiro_guerra_backup.db
+- **Admin** abre a etapa em *Etapas*.
+- **Recepção** marca presença em *Inscrições* (busca em tempo real; cadastra na
+  hora se não existir). A aba *Passadas (cobrança)* mostra quantas cada um fez.
+- **RO** abre *Linha de tiro* no Chrome (Android), conecta **Timer** e
+  **Impressora** (botões no topo — um toque cada, o navegador pede pra escolher
+  o aparelho), toca no atirador, escolhe a arma, confere e **Iniciar passada**.
+  O timer bipa sozinho; os disparos aparecem na tela. **Encerrar** → ajusta
+  penalidades → **Salvar** → o cupom sai automaticamente (ou pelo botão).
+- Errou? *Lançamentos* apaga a passada e reimprime.
+- Mantenha a tela do celular ligada com a página aberta (ela pede isso sozinha).
 
-# confere se copiou (deve mostrar o arquivo com tamanho > 0)
-ls -lh /root/tiro_guerra_backup.db
-```
+## Timer Special Pie M1A2 — protocolo (referência)
 
-*Alternativa sem SSH:* na aba **Terminal** do recurso no Coolify, rode
-`base64 /app/data/tiro_guerra.db` e salve a saída num arquivo local
-(depois restaure com `base64 -d`). O `docker cp` é bem mais simples.
-
-### 2. Criar o volume persistente no Coolify
-
-No recurso **Tiro de Guerra** → **Persistent Storage** → **+ Add**:
-
-- Tipo: **Volume Mount**
-- Name: `tiroguerra-data` (ou qualquer nome)
-- Destination Path: `/app/data`
-
-Salve. (Não precisa de Source Path para volume nomeado.)
-
-### 3. Subir o código novo e fazer o Redeploy
-
-Envie esta versão para o repositório Git ligado ao recurso (ou faça o upload
-da forma que você já usa) e clique em **Redeploy**.
-
-No primeiro boot, como o volume novo está vazio, o sistema vai carregar o
-`seed/` antigo — não se preocupe, o passo 4 substitui pelo banco real.
-
-### 4. Restaurar o banco real dentro do volume
-
-```bash
-# o container novo tem outro nome/id — descubra de novo
-docker ps | grep -i tiro
-
-# devolve o backup para dentro do volume
-docker cp /root/tiro_guerra_backup.db NOME_DO_CONTAINER:/app/data/tiro_guerra.db
-```
-
-Depois clique em **Restart** no Coolify. No boot, as migrações rodam sozinhas
-sobre o banco restaurado (aparece "Banco inicializado" no log).
-
-### 5. Conferir
-
-- Site abre e mostra a classificação de junho normalmente.
-- No bot: `/start` → **⚙️ Administração** → **🏷️ Categorias** deve mostrar
-  Pistola (3 categorias) e Carabina (1), com limites 8/8 e ⬆️3 ⬇️3 já
-  configurados, e Combatente marcado como 🚪inicial.
-- **👥 Equipe** → **🎖️ Cargos e permissões**: RO só com "Lançar e consultar
-  resultados" (a inscrição saiu do menu dos ROs automaticamente).
-
-A partir daqui, qualquer redeploy futuro preserva os dados, porque o banco
-vive no volume e não mais no container.
-
----
-
-## O que mudou nesta versão
-
-1. **PDF no fechamento da etapa** — ao fechar a etapa, o bot envia um PDF no
-   design do site com tempo, penalidades, tempo final e pontos de cada
-   atirador, por categoria, só daquela etapa.
-2. **Categorias (tipo → subcategoria)** — em Administração → Categorias:
-   criar/renomear/excluir tipos (pistola, carabina, novos) e categorias;
-   editar limite de atiradores, quantos sobem e quantos descem por mês; mover
-   a categoria na hierarquia; definir a categoria inicial.
-3. **Categoria inicial** — a inscrição não pergunta mais a categoria de
-   atirador novo: ele entra na categoria inicial configurada. A categoria de
-   qualquer atirador pode ser alterada manualmente em Atiradores → (atirador)
-   → 🏷️ Alterar categoria.
-4. **Lançamento de resultados** — primeiro escolhe o tipo (pistola/carabina/
-   etc.); na lista, aparecem primeiro os que ainda não passaram (⏳, ordem
-   alfabética) e depois os que já têm resultado (✅, ordem alfabética).
-5. **Equipe, cargos e permissões** — "Inscrever atirador" saiu do menu dos
-   ROs. O admin agora pode: renomear membro, alterar o cargo, remover;
-   criar/renomear/excluir cargos e ligar/desligar as permissões de cada um
-   (inscrever, resultados, atiradores). Os botões de aprovação de acesso
-   usam os cargos cadastrados.
-6. **Fechamento do mês** — a proposta de subidas/descidas agora segue a
-   configuração de cada categoria (não mais 3/3 fixo) e avisa se alguma
-   categoria ficar acima do limite de vagas.
-7. **Site e PDFs dinâmicos** — categorias e tipos novos aparecem
-   automaticamente no site, no PDF mensal e no PDF da etapa.
+Serviço BLE `0xFFF0`: notificação em `0xFFF1`, comando em `0xFFF2`.
+Quadro `F8 F9 <tipo> ... F9 F8`: `34` start, `36` disparo
+(`segundos` 2 bytes BE + `centésimos` 1 byte + nº do disparo + nº da string),
+`18` stop. Escrever `F8 F9 34 F9 F8` inicia; `F8 F9 18 F9 F8` para.

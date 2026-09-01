@@ -213,6 +213,36 @@ def register_web(app):
         finally:
             conn.close()
 
+    # ------------------------------------------------------------------
+    # Estatísticas do atirador (disparos, splits, passadas)
+    # ------------------------------------------------------------------
+    @app.get("/estatisticas", response_class=HTMLResponse)
+    async def estatisticas(request: Request, q: str = "", id: int = None):
+        from . import webdb
+        conn = db.get_conn()
+        try:
+            shooter, runs, results = None, [], []
+            if id:
+                shooter = db.get_shooter(conn, id)
+                if shooter:
+                    runs = webdb.shooter_history(conn, id)
+                    for r in runs:
+                        r["splits"] = [round(t - (r["shots"][i - 1] if i else 0), 2)
+                                       for i, t in enumerate(r["shots"])]
+                        r["month_label"] = f"{MONTH_PT[r['month']][:3]}/{r['year']}"
+                        r["modality_label"] = texts.modality_label(r["modality"])
+            elif q.strip():
+                results = db.search_shooters(conn, q, limit=20)
+            n_shooters = conn.execute(
+                "SELECT COUNT(*) AS n FROM shooters WHERE active=1").fetchone()["n"]
+        finally:
+            conn.close()
+        return templates.TemplateResponse(request, "stats.html", {
+            "club": config.CLUB_NAME, "q": q, "results": results,
+            "shooter": shooter, "runs": runs, "n_shooters": n_shooters,
+            "fmt_date": _fmt_date,
+        })
+
     @app.get("/health")
     async def health():
         return {"status": "ok"}

@@ -1,0 +1,69 @@
+{% extends "interno/_base.html" %}
+{% block title %}{{ sh.name }}{% endblock %}
+{% block content %}
+<a class="btn btn-ghost btn-sm" href="/interno/atiradores">‹ Atiradores</a>
+<h1 class="pg" style="margin-top:12px">{{ sh.name }}</h1>
+<p class="lead">{{ n_enroll }} inscrição(ões) no histórico.</p>
+<div class="grid2">
+  <form class="box" method="post" action="/interno/atiradores/{{ sh.id }}/editar">
+    <h2>Dados</h2>
+    <div class="f"><label>Nome completo</label><input type="text" name="name" value="{{ sh.name }}" style="text-transform:uppercase" required></div>
+    <div class="f"><label>CPF</label><input type="text" name="cpf" value="{{ fmt_cpf(sh.cpf) if sh.cpf else '' }}" inputmode="numeric"></div>
+    <button class="btn btn-gold">💾 Salvar</button>
+  </form>
+  <div class="box">
+    <h2>Categorias</h2>
+    {% for m in mods %}
+    <form method="post" action="/interno/atiradores/{{ sh.id }}/categoria" class="f">
+      <label>{{ m.label }} — atual: {{ m.category }}</label>
+      {% if 'admin' in perms %}
+      <div style="display:flex; gap:8px">
+        <input type="hidden" name="modality" value="{{ m.code }}">
+        <select name="category_id">{% for c in m.options %}<option value="{{ c.id }}" {% if c.id == m.category_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select>
+        <button class="btn btn-sm">Alterar</button>
+      </div>
+      {% endif %}
+    </form>
+    {% endfor %}
+    {% if 'admin' in perms %}<div class="muted small">A alteração vale imediatamente no mês aberto (inscrições e site). Meses fechados não mudam.</div>{% endif %}
+  </div>
+</div>
+<div class="box">
+  <h2>Últimas passadas</h2>
+  {% if hist %}
+  <table class="plain"><thead><tr><th>Etapa</th><th>Arma · cat.</th><th>Tempo</th><th>Pen.</th><th>Final</th><th>Disparos</th></tr></thead><tbody>
+  {% for r in hist %}
+  <tr><td>{{ r.stage_number }}ª · {{ month_pt[r.month][:3] }}/{{ r.year }}</td><td>{{ modality_label(r.modality) }} · {{ r.category }}</td>
+    <td class="num">{{ '%.2f'|format(r.raw) if r.raw else '—' }}</td><td class="num">{{ '+%d'|format(r.pen_secs) if r.pen_secs else '—' }}</td>
+    <td class="num"><b>{{ 'DQ' if r.dq else '%.2fs'|format(r.final) }}</b></td><td class="num">{{ r.n_shots or '—' }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  {% else %}<div class="muted small">Nenhuma passada.</div>{% endif %}
+</div>
+<div class="grid2">
+  <form class="box" method="post" action="/interno/atiradores/{{ sh.id }}/mesclar" onsubmit="return confirm('Mesclar ESTE cadastro no destino? Este será apagado e o histórico vai para o destino.')">
+    <h2>Mesclar (duplicado)</h2>
+    <div class="f"><label>Buscar cadastro de destino (o que fica)</label><input type="search" id="mq" placeholder="Parte do nome" autocomplete="off"></div>
+    <div id="mres" class="list" style="margin-bottom:10px"></div>
+    <input type="hidden" name="dst_id" id="dst">
+    <button class="btn" id="mbtn" disabled>🔗 Mesclar neste destino</button>
+  </form>
+  <form class="box" method="post" action="/interno/atiradores/{{ sh.id }}/excluir" onsubmit="return confirm('EXCLUIR {{ sh.name }} e TODO o histórico dele? Não pode ser desfeito.')">
+    <h2>Excluir</h2>
+    <div class="muted small" style="margin-bottom:10px">Apaga o atirador, inscrições e resultados. Prefira mesclar se for duplicado.</div>
+    <button class="btn btn-danger">🗑️ Excluir atirador</button>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+var t=null; document.getElementById('mq').addEventListener('input', function(){ clearTimeout(t); var v=this.value; t=setTimeout(async function(){
+  if(!v.trim()){ document.getElementById('mres').innerHTML=''; return; }
+  var rows = await (await fetch('/interno/api/atiradores/busca?q='+encodeURIComponent(v))).json();
+  document.getElementById('mres').innerHTML = rows.filter(function(r){return r.id!={{ sh.id }};}).map(function(r){
+    return '<div class="item" style="cursor:pointer" onclick="pick('+r.id+',this)"><div class="who"><div class="nm">'+r.name+'</div><div class="meta">'+(r.cpf||'sem CPF')+'</div></div></div>';
+  }).join('') || '<div class="muted small">nada encontrado</div>';
+}, 180); });
+function pick(id, el){ document.getElementById('dst').value=id; document.querySelectorAll('#mres .item').forEach(function(x){x.style.borderColor='';}); el.style.borderColor='var(--gold)'; document.getElementById('mbtn').disabled=false; }
+</script>
+{% endblock %}

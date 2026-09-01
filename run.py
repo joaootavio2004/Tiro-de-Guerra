@@ -42,6 +42,17 @@ async def lifespan(app: FastAPI):
     seed_if_empty()
     db.init_db()
     log.info("Banco inicializado em %s", config.DB_PATH)
+    # primeiro administrador da área interna (só se não houver nenhum usuário)
+    from app import webdb
+    conn = db.get_conn()
+    try:
+        pw = webdb.ensure_admin(conn, config.ADMIN_USER, config.ADMIN_PASSWORD)
+        conn.commit()
+    finally:
+        conn.close()
+    if pw:
+        log.warning("=== Área interna: usuário '%s' criado. Senha: %s ===",
+                    config.ADMIN_USER, pw if not config.ADMIN_PASSWORD else "(a de ADMIN_PASSWORD)")
     # inicia o bot
     await application.initialize()
     await application.start()
@@ -64,6 +75,12 @@ web = FastAPI(title=f"{config.CLUB_NAME} — Resultados", lifespan=lifespan)
 # Site público de resultados + rota /health
 from app.website import register_web  # noqa: E402
 register_web(web)
+
+# Área interna (/interno): login, linha de tiro, inscrições, administração
+from app.interno import router as interno_router  # noqa: E402
+from app.interno_admin import router as interno_admin_router  # noqa: E402
+web.include_router(interno_router)
+web.include_router(interno_admin_router)
 
 
 if __name__ == "__main__":

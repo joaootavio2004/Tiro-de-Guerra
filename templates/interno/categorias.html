@@ -1,0 +1,42 @@
+{% extends "interno/_base.html" %}
+{% block title %}Categorias{% endblock %}
+{% block content %}
+<h1 class="pg">Modalidades e categorias</h1>
+<p class="lead">Categorias da mais alta para a mais baixa. "Sobem/descem" são usados no fechamento do mês; "limite" só gera aviso. A categoria inicial é a de quem passa pela primeira vez.</p>
+{% for m in mods %}
+<div class="box">
+  <h2 style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">{{ m.m.label }} <span class="muted small" style="text-transform:none; letter-spacing:0">({{ m.m.code }})</span>
+    <form class="inline" method="post" action="/interno/modalidades/{{ m.m.code }}/renomear" onsubmit="var v=prompt('Novo nome:','{{ m.m.label }}'); if(!v) return false; this.label.value=v;"><input type="hidden" name="label"><button class="btn btn-sm">✏️</button></form>
+    {% if not m.in_use %}<form class="inline" method="post" action="/interno/modalidades/{{ m.m.code }}/excluir" onsubmit="return confirm('Excluir a modalidade {{ m.m.label }}?')"><button class="btn btn-sm btn-danger">🗑️</button></form>{% endif %}
+  </h2>
+  {% for c in m.cats %}
+  <form method="post" action="/interno/categorias/{{ c.c.id }}/editar" class="item" style="flex-wrap:wrap; gap:8px; margin-bottom:8px">
+    <div style="flex:2; min-width:160px"><label>Nome{% if c.c.entry %} · <span style="color:var(--gold)">inicial</span>{% endif %}</label><input type="text" name="name" value="{{ c.c.name }}"></div>
+    <div style="width:80px"><label>Limite</label><input type="number" name="max_shooters" value="{{ c.c.max_shooters or '' }}" placeholder="—" min="0"></div>
+    <div style="width:80px"><label>Sobem</label><input type="number" name="promote_n" value="{{ c.c.promote_n }}" min="0"></div>
+    <div style="width:80px"><label>Descem</label><input type="number" name="demote_n" value="{{ c.c.demote_n }}" min="0"></div>
+    <div style="display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap">
+      <button class="btn btn-sm btn-gold">💾</button>
+      <button class="btn btn-sm" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="up" title="Sobe na hierarquia">⬆️</button>
+      <button class="btn btn-sm" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="down" title="Desce na hierarquia">⬇️</button>
+      {% if not c.c.entry %}<button class="btn btn-sm" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="entry" title="Tornar inicial">🚩</button>{% endif %}
+      {% if not c.in_use %}<button class="btn btn-sm btn-danger" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="delete" onclick="return confirm('Excluir categoria?')">🗑️</button>{% endif %}
+    </div>
+    <div class="muted small" style="flex-basis:100%">{{ c.members }} atirador(es) atualmente · rank {{ c.c.rank }}</div>
+  </form>
+  {% endfor %}
+  <form method="post" action="/interno/categorias/nova" class="frow" style="margin-top:10px; border-top:1px dashed var(--line); padding-top:12px">
+    <input type="hidden" name="modality" value="{{ m.m.code }}">
+    <div><label>Nova categoria</label><input type="text" name="name" placeholder="Nome" required></div>
+    <div style="max-width:100px"><label>Limite</label><input type="number" name="max_shooters" placeholder="—"></div>
+    <div style="max-width:100px"><label>Sobem</label><input type="number" name="promote_n" value="0"></div>
+    <div style="max-width:100px"><label>Descem</label><input type="number" name="demote_n" value="0"></div>
+    <div><button class="btn btn-block">➕ Criar</button></div>
+  </form>
+</div>
+{% endfor %}
+<form class="box frow" method="post" action="/interno/modalidades/nova">
+  <div><label>Nova modalidade (tipo de arma)</label><input type="text" name="label" placeholder="Ex.: Carabina .22" required></div>
+  <div><button class="btn btn-gold btn-block">➕ Criar modalidade</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "interno/_base.html" %}
+{% block title %}Classificação{% endblock %}
+{% block content %}
+<h1 class="pg">Classificação</h1>
+<p class="lead">Mesmos números do site público. Menor tempo da categoria vale 100 pontos; no mês contam as melhores etapas (descarta a pior).</p>
+<div class="sub-tabs">
+  <button class="on" onclick="tab(this,'tEtapa')">🎯 Etapa aberta</button>
+  <button onclick="tab(this,'tMes')">🏆 Mês</button>
+</div>
+<section id="tEtapa">
+  {% if not open_stage %}<div class="box muted">Não há etapa aberta.</div>{% endif %}
+  {% for s in stage_secs %}
+  <div class="box">
+    <h2>{{ s.modality }} · {{ s.category }}</h2>
+    <table class="plain"><thead><tr><th style="width:36px">#</th><th>Atirador</th><th style="text-align:right">Tempo</th><th style="text-align:right">Pontos</th></tr></thead><tbody>
+      {% for r in s.rows %}<tr><td class="num">{{ r.pos }}</td><td>{{ r.shooter_name }}</td><td class="num" style="text-align:right">{{ '%.2fs'|format(r.time) if r.time else 'DQ' }}</td><td class="num" style="text-align:right"><b>{{ '%.2f'|format(r.points) }}</b></td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% else %}{% if open_stage %}<div class="box muted">Nenhum tempo lançado ainda.</div>{% endif %}{% endfor %}
+</section>
+<section id="tMes" class="hide">
+  <form method="get" action="/interno/classificacao" class="box" style="display:flex; gap:10px; align-items:center">
+    <label style="margin:0">Mês</label>
+    <select name="mes" onchange="this.form.submit()" style="max-width:240px">{% for m in months %}<option value="{{ m.id }}" {% if m.id == month.id %}selected{% endif %}>{{ month_pt[m.month] }} {{ m.year }}{% if m.status=='aberto' %} · aberto{% endif %}</option>{% endfor %}</select>
+  </form>
+  {% for s in month_secs %}
+  <div class="box">
+    <h2>{{ s.modality }} · {{ s.category }} <span class="tag">conta {{ s.table.best_n }} de {{ s.table.stages|length }}</span></h2>
+    <div class="tbl-scroll"><table class="plain"><thead><tr><th style="width:36px">#</th><th>Atirador</th>{% for et in s.table.stages %}<th style="text-align:right">{{ et.number }}ª<br><span class="muted" style="font-weight:400">{{ fmt_date_short(et.date) }}</span></th>{% endfor %}<th style="text-align:right">Total</th></tr></thead><tbody>
+      {% for r in s.table.rows %}<tr><td class="num">{{ r.pos }}</td><td>{{ r.name }}</td>{% for c in r.cells %}<td class="num" style="text-align:right;{% if c.dropped %}opacity:.45;text-decoration:line-through{% endif %}">{% if c.present %}{{ '%.2f'|format(c.points) }}<br><span class="muted" style="font-size:11px">{{ c.time }}s</span>{% else %}—{% endif %}</td>{% endfor %}<td class="num" style="text-align:right"><b>{{ '%.2f'|format(r.total) }}</b></td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+  {% else %}<div class="box muted">Sem resultados no mês.</div>{% endfor %}
+</section>
+{% endblock %}
+{% block scripts %}<script>function tab(b,id){document.querySelectorAll('.sub-tabs button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');document.getElementById('tEtapa').classList.toggle('hide',id!=='tEtapa');document.getElementById('tMes').classList.toggle('hide',id!=='tMes');}
+{% if request.query_params.get('mes') %}tab(document.querySelectorAll('.sub-tabs button')[1],'tMes');{% endif %}</script>{% endblock %}

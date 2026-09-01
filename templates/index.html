@@ -69,6 +69,7 @@
   {% if sections %}
   <nav class="tabs" role="tablist">
     <button class="tab active" data-target="__all__" role="tab">📋 Todas</button>
+    <a class="tab" href="/estatisticas" style="text-decoration:none">📈 Estatísticas do atirador</a>
     {% for s in sections %}
     <button class="tab" data-target="{{ s.id }}" role="tab">
       <span class="mod">{{ s.modality_label }}</span> · {{ s.category }}
@@ -131,7 +132,7 @@
   {% endfor %}
   </div>
   {% else %}
-  <div class="empty">Ainda não há resultados publicados para este mês.</div>
+  <div class="empty">Ainda não há resultados publicados para este mês.<br><a href="/estatisticas" style="color:var(--gold)">📈 Estatísticas do atirador</a></div>
   {% endif %}
 </main>
 

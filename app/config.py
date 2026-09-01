@@ -16,7 +16,15 @@ DB_PATH = os.environ.get("DB_PATH", "data/tiro_guerra.db")
 # Nome do clube (usado em mensagens e, depois, no site).
 CLUB_NAME = os.environ.get("CLUB_NAME", "GUERRA Clube de Tiro")
 
-# Porta do servidor web (o site entra aqui na próxima fase).
+# Área interna do site (/interno): primeiro administrador.
+# Só é usado se ainda não existir nenhum usuário cadastrado.
+ADMIN_USER = os.environ.get("ADMIN_USER", "admin").strip().lower()
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "").strip()
+
+# Endereço público do site (impresso no QR do cupom térmico).
+SITE_URL = os.environ.get("SITE_URL", "https://tirodeguerra.com.br").strip()
+
+# Porta do servidor web.
 WEB_PORT = int(os.environ.get("PORT", "8000"))
 
 # Fuso horário.

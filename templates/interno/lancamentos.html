@@ -1,0 +1,34 @@
+{% extends "interno/_base.html" %}
+{% block title %}Lançamentos{% endblock %}
+{% block head %}<style>.toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--gold); color:var(--ink); border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s} .toast.show{opacity:1} .toast.err{background:#c0392b; color:#fff}</style>{% endblock %}
+{% block content %}
+<h1 class="pg">Lançamentos</h1>
+<p class="lead">{% if open_stage %}{{ open_stage_label }} — passadas lançadas nesta etapa. Apague a errada e lance de novo pela linha de tiro.{% else %}Não há etapa aberta.{% endif %}</p>
+<div class="devices" style="margin-bottom:14px"><span class="conn"><span class="dot" id="pDot"></span>Impressora: <b id="pSt">desconectada</b>&nbsp;<button class="btn btn-sm btn-gold" id="pBtn">Conectar</button></span></div>
+{% for row in rows %}
+<div class="box">
+  <h2>{{ row.shooter.name }} <span class="tag">{{ row.shooter.runs }} passada{{ 's' if row.shooter.runs != 1 }}</span></h2>
+  {% for r in row.runs %}
+  <div class="item" style="margin-bottom:8px">
+    <div class="who">
+      <div class="nm">{{ 'DQ' if r.dq else '%.2fs'|format(r.final) }} <span class="muted" style="font-size:12px; font-weight:400">{{ modality_label(r.modality) }} · {{ r.category }}</span></div>
+      <div class="meta">{{ r.created_at[11:16] }} · {% if r.dq %}desqualificado{% else %}pista {{ '%.2f'|format(r.raw) }}s{% if r.pen_secs %} + {{ r.pen_secs }}s pen.{% endif %}{% endif %}{% if r.n_shots %} · {{ r.n_shots }} disparos{% endif %}{% if r.source == 'timer' %} · timer{% endif %}</div>
+    </div>
+    <button class="btn btn-sm" onclick='printRun({{ r|tojson }}, {{ row.shooter.name|tojson }}, this)'>🖨️</button>
+    <form method="post" action="/interno/lancamentos/apagar" onsubmit="return confirm('Apagar esta passada?')"><input type="hidden" name="run_id" value="{{ r.id }}"><button class="btn btn-sm btn-danger">Apagar</button></form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="box muted">Nenhuma passada lançada ainda.</div>
+{% endfor %}
+<div class="toast" id="toast"></div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/interno-print.js"></script>
+<script>
+var CLUB={{ club|tojson }}, SITE={{ site_url|tojson }}, MODS={{ modalities|tojson if modalities is defined else '[]' }}, STAGE={{ open_stage_label|tojson }};
+var tT=null; function toast(s,e){var m=document.getElementById('toast');m.textContent=s;m.className='toast show'+(e?' err':'');clearTimeout(tT);tT=setTimeout(function(){m.classList.remove('show');},3500);}
+document.getElementById('pBtn').addEventListener('click', connectPrinter);
+</script>
+{% endblock %}

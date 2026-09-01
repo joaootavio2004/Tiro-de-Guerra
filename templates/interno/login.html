@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Entrar — {{ club }}</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+{% include "_head.html" %}
+<style>
+  .box{max-width:380px; margin:60px auto; background:var(--surface); border:1px solid var(--line);
+    border-radius:18px; padding:28px}
+  .box img{height:64px; display:block; margin:0 auto 10px}
+  .box h1{font-family:"Oswald",sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:.1em;
+    font-size:18px; text-align:center; margin:0 0 4px}
+  .box p{text-align:center; color:var(--muted); font-size:13px; margin:0 0 22px}
+  label{font-family:"Oswald",sans-serif; font-weight:500; text-transform:uppercase; letter-spacing:.1em;
+    font-size:11px; color:var(--muted); display:block; margin-bottom:5px}
+  input{width:100%; border:1px solid var(--line); border-radius:10px; background:var(--ink); padding:12px;
+    font-family:"Inter",sans-serif; font-size:15px; color:var(--text); margin-bottom:14px}
+  button{width:100%; font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.1em; text-transform:uppercase;
+    font-size:14px; border-radius:999px; border:none; background:var(--gold); color:var(--ink); padding:13px; cursor:pointer}
+  .err{background:rgba(220,80,80,.12); border:1px solid #7a3a3a; color:#f0a0a0; border-radius:10px;
+    padding:10px 12px; font-size:13px; margin-bottom:14px; text-align:center}
+</style>
+</head>
+<body>
+  <form class="box" method="post" action="/interno/login" autocomplete="on">
+    <img src="/static/logo.png" alt="">
+    <h1>Área interna</h1>
+    <p>{{ club }}</p>
+    {% if error %}<div class="err">Usuário ou senha inválidos.</div>{% endif %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Usuário</label>
+    <input type="text" name="username" autocapitalize="none" autocorrect="off" required autofocus>
+    <label>Senha</label>
+    <input type="password" name="password" required>
+    <button>Entrar</button>
+  </form>
+</body>
+</html>

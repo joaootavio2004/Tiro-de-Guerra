@@ -143,3 +143,24 @@ Dockerfile / docker-compose.yml   implantação no Coolify
 O sistema já guarda tudo pronto para o site de resultados, que vai usar as
 cores da marca (verde/dourado da logo) e mostrar as classificações ao público
 no seu domínio — sem precisar mexer nos dados do bot.
+
+
+---
+
+## Área interna (site) — `/interno`
+
+Tudo do bot em páginas, mais timer Bluetooth (Special Pie M1A2), impressora
+térmica e estatísticas por disparo. Veja **ATUALIZACAO.md** para o passo a
+passo de deploy e uso. Rotas principais:
+
+| Rota | Quem | O que faz |
+|---|---|---|
+| `/interno/linha` | RO | Lançar passada com timer/impressora, manual, somar/reiniciar |
+| `/interno/lancamentos` | RO | Conferir, apagar, reimprimir |
+| `/interno/inscricoes` | Recepção | Presença na etapa + passadas para cobrança |
+| `/interno/atiradores` | Recepção/Admin | Cadastro, CPF, categoria, mesclar, excluir |
+| `/interno/classificacao` | Todos | Etapa aberta e mês |
+| `/interno/etapas` | Admin | Abrir/fechar etapas, PDFs, fechar mês |
+| `/interno/categorias` | Admin | Modalidades e categorias |
+| `/interno/usuarios` | Admin | Logins, cargos e permissões |
+| `/estatisticas` | Público | Estatísticas do atirador (disparos, splits) |
