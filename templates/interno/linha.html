@@ -25,6 +25,8 @@
   .clock{font-family:"Oswald",sans-serif; font-weight:700; font-size:64px; line-height:1; letter-spacing:.01em;
     color:var(--gold-bright); font-variant-numeric:tabular-nums; text-align:center; margin:8px 0}
   .clock small{font-size:22px; font-weight:600}
+  .clocklbl{text-align:center; font-family:"Oswald",sans-serif; letter-spacing:.2em; text-transform:uppercase;
+    font-size:10.5px; color:var(--muted); margin-bottom:6px}
   .state{text-align:center; font-family:"Oswald",sans-serif; letter-spacing:.2em; text-transform:uppercase; font-size:12px; color:var(--muted)}
   .state.live{color:#9fd48a}
   .shots{display:flex; flex-wrap:wrap; gap:6px; margin:14px 0; justify-content:center}
@@ -101,7 +103,8 @@
     <p class="big-name" style="font-size:22px" id="runName">—</p>
     <div class="muted small" id="runMeta"></div>
     <div class="state" id="runState">aguardando o timer</div>
-    <div class="clock" id="clock">0.00<small>s</small></div>
+    <div class="clock" id="clock">—</div>
+    <div class="clocklbl" id="clockLbl">último disparo</div>
     <div class="shots" id="runShots"></div>
     <div class="actions">
       <button class="btn btn-gold btn-lg btn-block" onclick="finishRun()">🏁 Encerrar passada</button>
@@ -249,7 +252,7 @@ function renderMods(){
 /* ============================ Timer Special Pie (BLE) ============================ */
 var timerDev=null, timerChar=null, timerWrite=null;
 var RUN = null;  // {shots:[{t,seg}], offset, seg, str, state:'armed'|'live'|'paused'}
-var clockTimer=null, clockBase=null;
+
 
 async function connectTimer(){
   if(!navigator.bluetooth){ toast('Use o Chrome no Android para Bluetooth.', true); return; }
@@ -285,11 +288,11 @@ function onTimerStart(str){
   if(!RUN){ // RO deu start no aparelho com atirador escolhido: entra na passada
     if(SH && document.getElementById('scrShooter').classList.contains('on') && CATS[MOD]){ beginRun(); } else return;
   }
-  if(RUN.state==='armed' || RUN.state==='paused'){ RUN.str=str; RUN.state='live'; RUN.seg+=1; startClock(); renderRun(); }
+  if(RUN.state==='armed' || RUN.state==='paused'){ RUN.str=str; RUN.state='live'; RUN.seg+=1; renderRun(); }
 }
 function onTimerShot(t, idx, str){
   if(!RUN) return;
-  if(RUN.state==='armed'){ RUN.str=str; RUN.state='live'; RUN.seg+=1; startClock(); } // perdeu o pacote de start
+  if(RUN.state==='armed'){ RUN.str=str; RUN.state='live'; RUN.seg+=1; } // perdeu o pacote de start
   if(RUN.state!=='live' || str!==RUN.str) return;
   RUN.shots.push({t: RUN.offset + t, seg: RUN.seg, raw:t});
   renderRun();
@@ -297,11 +300,18 @@ function onTimerShot(t, idx, str){
 function onTimerStop(str){
   if(!RUN || RUN.state!=='live' || str!==RUN.str) return;
   // timer parou (pelo aparelho ou por comando nosso); mantém tela até o RO decidir
-  RUN.state='paused'; stopClock(); renderRun();
+  RUN.state='paused'; renderRun();
 }
-function startClock(){ clockBase = Date.now() - RUN.offset*1000; stopClock(); clockTimer=setInterval(tickClock, 50); }
-function stopClock(){ if(clockTimer){ clearInterval(clockTimer); clockTimer=null; } }
-function tickClock(){ var t=(Date.now()-clockBase)/1000; $('clock').innerHTML = f2(t)+'<small>s</small>'; }
+/* O timer tem atraso proposital e aleatório antes do beep, e o site não sabe
+   a hora exata dele — por isso não existe cronômetro aqui. A tela mostra
+   sempre o tempo do ÚLTIMO DISPARO recebido, que é o número real do timer. */
+function showLast(){
+  var last = RUN && RUN.shots.length ? RUN.shots[RUN.shots.length-1].t : null;
+  $('clock').innerHTML = last==null ? '—' : f2(last)+'<small>s</small>';
+  $('clockLbl').textContent = last==null
+    ? (RUN && RUN.state==='live' ? 'aguardando o primeiro disparo' : 'nenhum disparo')
+    : 'último disparo · '+RUN.shots.length+' no total';
+}
 
 /* ============================ C · passada ============================ */
 function beginRun(){
@@ -309,7 +319,6 @@ function beginRun(){
   $('runName').textContent = SH.name;
   var ml=(MODS.find(function(x){return x.code===MOD;})||{}).label||MOD;
   $('runMeta').textContent = ml+' · '+(CATS[MOD]?CATS[MOD].name:'');
-  $('clock').innerHTML='0.00<small>s</small>';
   renderRun(); go('run');
 }
 async function startRun(){
@@ -320,9 +329,8 @@ async function startRun(){
 function renderRun(){
   var st = $('runState');
   st.className = 'state'+(RUN.state==='live'?' live':'');
-  st.textContent = RUN.state==='armed' ? 'aguardando o beep do timer' : RUN.state==='live' ? '● cronometrando' : 'timer parado — encerre, some ou reinicie';
-  var last = RUN.shots.length ? RUN.shots[RUN.shots.length-1].t : 0;
-  if(RUN.state!=='live') $('clock').innerHTML = f2(last)+'<small>s</small>';
+  st.textContent = RUN.state==='armed' ? 'aguardando o beep do timer' : RUN.state==='live' ? '● passada em andamento' : 'timer parado — encerre, some ou reinicie';
+  showLast();
   $('runShots').innerHTML = RUN.shots.map(function(s,i){
     var split = i ? s.t - RUN.shots[i-1].t : s.t;
     return '<div class="shot'+(i && RUN.shots[i-1].seg!==s.seg?' seg':'')+'">'+f2(s.t)+'<small>#'+(i+1)+' · '+f2(split)+'</small></div>';
@@ -333,7 +341,7 @@ async function sumRun(){
   // pane na pista: para o timer, guarda o tempo corrido e, no próximo start, continua somando
   if(RUN.state==='live'){
     await timerCmd(0x18);
-    RUN.state='paused'; stopClock();
+    RUN.state='paused';
     var last = RUN.shots.length ? RUN.shots[RUN.shots.length-1].t : RUN.offset;
     RUN.offset = last;
     renderRun(); toast('Tempo guardado: '+f2(RUN.offset)+'s. Continue quando a pista liberar.');
@@ -346,18 +354,16 @@ async function sumRun(){
 async function restartRun(){
   if(!confirm('Reiniciar a passada? Os disparos serão descartados.')) return;
   await timerCmd(0x18);
-  RUN = {shots:[], offset:0, seg:0, str:null, state:'armed'}; stopClock();
-  $('clock').innerHTML='0.00<small>s</small>'; renderRun();
+  RUN = {shots:[], offset:0, seg:0, str:null, state:'armed'}; renderRun();
   if(timerWrite){ await new Promise(function(r){ setTimeout(r, 600); }); await timerCmd(0x34); }
   else toast('Dê o start no aparelho.');
 }
 async function cancelRun(){
   if(RUN && RUN.shots.length && !confirm('Descartar esta passada?')) return;
-  await timerCmd(0x18); RUN=null; stopClock(); go('shooter');
+  await timerCmd(0x18); RUN=null; go('shooter');
 }
 async function finishRun(){
   if(RUN.state==='live') await timerCmd(0x18);
-  stopClock();
   openFinish(RUN.shots.map(function(s){return s.t;}), RUN.seg||1);
 }
 function manualRun(){ RUN=null; openFinish([], 1); }

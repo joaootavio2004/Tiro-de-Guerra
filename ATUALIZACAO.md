@@ -10,12 +10,20 @@ bot faz — e mais:
   Funções da passada: **Reiniciar** (descarta e dispara o timer de novo),
   **Somar** (pane na pista: guarda o tempo corrido e continua no próximo
   acionamento) e **Encerrar** (penalidades + confirmação do tempo). Lançamento
-  manual continua disponível.
+  manual continua disponível. **Não há cronômetro na tela**: o timer tem atraso
+  proposital e aleatório antes do beep, então o site mostra sempre o *tempo do
+  último disparo* — o número real do timer.
 - **Inscrições** viram só *presença na etapa*: sem arma e sem quantidade. O RO
-  escolhe a arma na hora; cada tempo lançado conta como uma passada.
+  escolhe a arma na hora; cada tempo lançado conta como uma passada. A recepção
+  é **obrigada a buscar** antes de cadastrar (o botão "cadastrar novo" aparece
+  dentro do resultado da busca, já com o nome digitado) e o **CPF é obrigatório**
+  — inclusive para cadastros antigos que estavam sem, que pedem o CPF na hora de
+  marcar presença. É o que evita atirador duplicado.
 - **Passadas (cobrança)**: lista de atiradores com passadas finalizadas por arma.
 - **Estatísticas do atirador** no site público (`/estatisticas`): 1º disparo,
-  split de cada tiro, quantidade, tempo total e penalidades, por passada.
+  split de cada tiro, quantidade, tempo total e penalidades, por passada —
+  sempre de **uma etapa por vez** (a mais recente por padrão, com seletor das
+  demais), porque cada pista é diferente e comparar etapas não diz muita coisa.
 - Cadastro de atiradores, lançamentos, classificação, etapas/mês (com PDFs e
   fechamento), categorias e usuários/cargos.
 

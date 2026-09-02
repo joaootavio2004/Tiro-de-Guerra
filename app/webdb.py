@@ -273,8 +273,8 @@ def shooter_history(conn, shooter_id: int) -> List[Dict[str, Any]]:
     """Todas as passadas do atirador (todas as etapas), mais recente primeiro —
     para a aba de estatísticas do site."""
     rows = conn.execute(
-        "SELECT ru.*, e.modality, c.name AS category_name, st.number AS stage_number, "
-        "st.date AS stage_date, m.year, m.month "
+        "SELECT ru.*, e.modality, c.name AS category_name, st.id AS stage_id, "
+        "st.number AS stage_number, st.date AS stage_date, m.year, m.month "
         "FROM runs ru JOIN enrollments e ON e.id=ru.enrollment_id "
         "JOIN categories c ON c.id=e.category_id "
         "JOIN stages st ON st.id=e.stage_id JOIN months m ON m.id=st.month_id "
@@ -283,6 +283,7 @@ def shooter_history(conn, shooter_id: int) -> List[Dict[str, Any]]:
     out = []
     for r in rows:
         d = run_dict(conn, r)
+        d["stage_id"] = r["stage_id"]
         d["stage_number"] = r["stage_number"]
         d["stage_date"] = r["stage_date"]
         d["year"], d["month"] = r["year"], r["month"]

@@ -360,8 +360,10 @@ async def api_busca(request: Request, q: str = ""):
         if stage:
             ids = {p["id"] for p in webdb.stage_participants(conn, stage["id"])}
         rows = db.search_shooters(conn, q, limit=12) if q.strip() else []
-        return [{"id": r["id"], "name": r["name"], "cpf": util.fmt_cpf(r["cpf"]) if r["cpf"] else "",
-                 "checked_in": r["id"] in ids} for r in rows]
+        return [{"id": r["id"], "name": r["name"],
+                 "cpf": util.fmt_cpf(r["cpf"]) if r["cpf"] else "",
+                 "has_cpf": bool(r["cpf"]), "checked_in": r["id"] in ids}
+                for r in rows]
     finally:
         conn.close()
 
@@ -385,6 +387,23 @@ async def api_checkin(request: Request):
                 db.delete_enrollment(conn, e["id"])
             webdb.remove_checkin(conn, stage["id"], sid)
         else:
+            sh = db.get_shooter(conn, sid)
+            if not sh:
+                raise HTTPException(404, "atirador não encontrado")
+            cpf = (body.get("cpf") or "").strip()
+            if not sh["cpf"]:
+                # CPF é obrigatório para marcar presença — é o que evita
+                # cadastros duplicados. Cadastro antigo sem CPF é completado aqui.
+                if not cpf:
+                    return {"ok": False, "need_cpf": True, "shooter_id": sid,
+                            "name": sh["name"]}
+                if not util.valid_cpf(cpf):
+                    raise HTTPException(400, "CPF inválido")
+                other = db.get_shooter_by_cpf(conn, cpf)
+                if other and other["id"] != sid:
+                    raise HTTPException(
+                        400, f"Este CPF já é de {other['name']} — use o cadastro dele.")
+                db.update_shooter(conn, sid, cpf=cpf)
             webdb.checkin(conn, stage["id"], sid, user["id"])
         conn.commit()
         return {"ok": True, "participants": webdb.stage_participants(conn, stage["id"])}
@@ -402,10 +421,15 @@ async def api_novo_atirador(request: Request):
         cpf = (body.get("cpf") or "").strip()
         if len(name) < 3:
             raise HTTPException(400, "nome muito curto")
+        if body.get("checkin") and not cpf:
+            raise HTTPException(400, "CPF é obrigatório para inscrever")
         if cpf and not util.valid_cpf(cpf):
             raise HTTPException(400, "CPF inválido")
-        if cpf and db.get_shooter_by_cpf(conn, cpf):
-            raise HTTPException(400, "já existe atirador com este CPF")
+        if cpf:
+            other = db.get_shooter_by_cpf(conn, cpf)
+            if other:
+                raise HTTPException(
+                    400, f"Este CPF já está cadastrado para {other['name']}.")
         dup = [r for r in db.search_shooters(conn, name, 3)
                if r["name_key"] == util.norm_name(name)]
         if dup and not body.get("force"):

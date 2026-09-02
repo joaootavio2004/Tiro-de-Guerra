@@ -217,15 +217,33 @@ def register_web(app):
     # Estatísticas do atirador (disparos, splits, passadas)
     # ------------------------------------------------------------------
     @app.get("/estatisticas", response_class=HTMLResponse)
-    async def estatisticas(request: Request, q: str = "", id: int = None):
+    async def estatisticas(request: Request, q: str = "", id: int = None,
+                           etapa: int = None):
         from . import webdb
         conn = db.get_conn()
         try:
             shooter, runs, results = None, [], []
+            stage_options, stage_label, older = [], "", 0
             if id:
                 shooter = db.get_shooter(conn, id)
                 if shooter:
-                    runs = webdb.shooter_history(conn, id)
+                    hist = webdb.shooter_history(conn, id)
+                    # Cada pista é diferente, então as estatísticas são SEMPRE de
+                    # uma etapa por vez (a mais recente, por padrão).
+                    seen = []
+                    for r in hist:
+                        key = r["stage_id"]
+                        if key not in [s["id"] for s in seen]:
+                            seen.append({"id": key, "number": r["stage_number"],
+                                         "date": r["stage_date"],
+                                         "label": f"{r['stage_number']}ª etapa · "
+                                                  f"{MONTH_PT[r['month']][:3]}/{r['year']}"})
+                    sel = etapa if etapa and any(s["id"] == etapa for s in seen) else (
+                        seen[0]["id"] if seen else None)
+                    stage_options = [dict(s, selected=s["id"] == sel) for s in seen]
+                    stage_label = next((s["label"] for s in seen if s["id"] == sel), "")
+                    runs = [r for r in hist if r["stage_id"] == sel]
+                    older = len(hist) - len(runs)
                     for r in runs:
                         r["splits"] = [round(t - (r["shots"][i - 1] if i else 0), 2)
                                        for i, t in enumerate(r["shots"])]
@@ -240,7 +258,8 @@ def register_web(app):
         return templates.TemplateResponse(request, "stats.html", {
             "club": config.CLUB_NAME, "q": q, "results": results,
             "shooter": shooter, "runs": runs, "n_shooters": n_shooters,
-            "fmt_date": _fmt_date,
+            "stage_options": stage_options, "stage_label": stage_label,
+            "older": older, "fmt_date": _fmt_date,
         })
 
     @app.get("/health")

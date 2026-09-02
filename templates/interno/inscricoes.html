@@ -2,17 +2,23 @@
 {% block title %}Inscrições{% endblock %}
 {% block head %}
 <style>
-  .res{margin-top:8px; display:flex; flex-direction:column; gap:6px}
+  .res{margin-top:10px; display:flex; flex-direction:column; gap:6px}
   .res .item{cursor:default}
-  .newbox{margin-top:10px; border:1px dashed var(--line); border-radius:12px; padding:12px}
+  .newrow{border:1px dashed var(--gold); background:var(--gold-soft)}
+  .cpfbox{border:1px solid var(--gold); background:var(--surface2); border-radius:12px; padding:14px; margin-top:8px}
+  .cpfbox .nm{font-family:"Oswald",sans-serif; font-weight:600; text-transform:uppercase; font-size:17px}
+  .cpfbox .why{color:var(--muted); font-size:12.5px; margin:4px 0 10px}
+  .cpfbox .row{display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap}
+  .cpfbox .row > div{flex:1; min-width:160px}
   .toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--gold); color:var(--ink);
-    border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s}
+    border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none;
+    transition:opacity .25s; max-width:90vw; text-align:center}
   .toast.show{opacity:1} .toast.err{background:#c0392b; color:#fff}
 </style>
 {% endblock %}
 {% block content %}
 <h1 class="pg">Inscrições</h1>
-<p class="lead">{% if open_stage %}{{ open_stage_label }} · {{ fmt_date(open_stage.date) }} — marque quem está presente. Arma e quantidade de passadas não se escolhem mais aqui: o RO define a arma na hora, e cada tempo lançado conta como uma passada.{% else %}Não há etapa aberta.{% endif %}</p>
+<p class="lead">{% if open_stage %}{{ open_stage_label }} · {{ fmt_date(open_stage.date) }} — busque o atirador e marque presença. Todo atirador precisa de CPF cadastrado (é o que evita cadastro duplicado). A arma é escolhida pelo RO na hora da passada.{% else %}Não há etapa aberta.{% endif %}</p>
 
 <div class="sub-tabs">
   <button class="on" data-t="tabPres" onclick="tab(this)">📝 Presença</button>
@@ -22,18 +28,8 @@
 <section id="tabPres">
   <div class="box">
     <h2>Buscar atirador</h2>
-    <div class="search"><input type="search" id="q" placeholder="Digite parte do nome" autocomplete="off" {% if not open_stage %}disabled{% endif %}></div>
+    <div class="search"><input type="search" id="q" placeholder="Digite o nome (ou parte dele)" autocomplete="off" {% if not open_stage %}disabled{% endif %}></div>
     <div class="res" id="res"></div>
-    {% if can_create %}
-    <div class="newbox" id="newbox">
-      <div class="muted small" style="margin-bottom:8px">Não achou? Cadastre e já marque presença:</div>
-      <div class="frow">
-        <div><label>Nome completo</label><input type="text" id="nName" style="text-transform:uppercase" autocomplete="off"></div>
-        <div><label>CPF (opcional)</label><input type="text" id="nCpf" inputmode="numeric" placeholder="000.000.000-00"></div>
-        <div><button class="btn btn-gold btn-block" onclick="createShooter(false)">➕ Cadastrar e inscrever</button></div>
-      </div>
-    </div>
-    {% endif %}
   </div>
   <div class="box">
     <h2>Presentes na etapa <span class="tag" id="cnt">{{ participants|length }}</span></h2>
@@ -55,50 +51,130 @@
 "use strict";
 var MODS = {{ modalities|tojson }};
 var PARTS = {{ participants|tojson }};
+var CAN_CREATE = {{ 'true' if can_create else 'false' }};
 function $(id){return document.getElementById(id);}
 function esc(s){var d=document.createElement('div');d.textContent=s==null?'':s;return d.innerHTML;}
-var tT=null; function toast(s,e){var m=$('toast');m.textContent=s;m.className='toast show'+(e?' err':'');clearTimeout(tT);tT=setTimeout(function(){m.classList.remove('show');},3500);}
+var tT=null; function toast(s,e){var m=$('toast');m.textContent=s;m.className='toast show'+(e?' err':'');clearTimeout(tT);tT=setTimeout(function(){m.classList.remove('show');},4500);}
 function tab(b){ document.querySelectorAll('.sub-tabs button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
   ['tabPres','tabBill'].forEach(function(id){ $(id).classList.toggle('hide', id!==b.dataset.t); }); if(b.dataset.t==='tabBill') renderBill(); }
 async function api(url, body){ var r=await fetch(url, body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});
-  if(r.status===401){location.href='/interno/login?next=/interno/inscricoes';throw new Error('login');} var d=await r.json().catch(function(){return {};}); if(!r.ok) throw new Error(d.detail||('erro '+r.status)); return d; }
+  if(r.status===401){location.href='/interno/login?next=/interno/inscricoes';throw new Error('login');}
+  var d=await r.json().catch(function(){return {};}); if(!r.ok) throw new Error(d.detail||('erro '+r.status)); return d; }
 
+/* --------- máscara e conferência do CPF (no navegador, pra errar menos) --------- */
+function maskCPF(v){ v=(v||'').replace(/\D/g,'').slice(0,11);
+  if(v.length>9) return v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
+  if(v.length>6) return v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);
+  if(v.length>3) return v.slice(0,3)+'.'+v.slice(3);
+  return v; }
+function validCPF(v){ var c=(v||'').replace(/\D/g,'');
+  if(c.length!==11 || /^(\d)\1{10}$/.test(c)) return false;
+  for(var i=9;i<11;i++){ var s=0; for(var n=0;n<i;n++) s+=parseInt(c[n],10)*((i+1)-n);
+    var d=(s*10)%11; if(d===10) d=0; if(d!==parseInt(c[i],10)) return false; }
+  return true; }
+function bindCPF(el){ el.addEventListener('input', function(){ this.value=maskCPF(this.value); }); }
+
+/* --------- lista de presentes --------- */
 function renderList(){
   $('cnt').textContent = PARTS.length;
   $('list').innerHTML = PARTS.map(function(p){
     return '<div class="item'+(p.runs?' done':'')+'"><div class="who"><div class="nm">'+esc(p.name)+'</div><div class="meta">'+(p.runs?p.runs+' passada'+(p.runs>1?'s':'')+' lançada'+(p.runs>1?'s':''):'aguardando')+'</div></div>'+
-      (p.runs?'':'<button class="btn btn-sm btn-danger" onclick="toggle('+p.id+',true)">Remover</button>')+'</div>';
+      (p.runs?'':'<button class="btn btn-sm btn-danger" onclick="removeP('+p.id+')">Remover</button>')+'</div>';
   }).join('') || '<div class="muted small">Ninguém marcado ainda.</div>';
 }
-var lastQ='', searchT=null;
+
+/* --------- busca (obrigatória antes de cadastrar) --------- */
+var searchT=null;
 $('q').addEventListener('input', function(){ clearTimeout(searchT); var v=this.value; searchT=setTimeout(function(){ search(v); }, 180); });
 async function search(v){
-  if(!v.trim()){ $('res').innerHTML=''; return; }
+  var term=(v||'').trim();
+  if(!term){ $('res').innerHTML=''; return; }
   try{
-    var rows = await api('/interno/api/atiradores/busca?q='+encodeURIComponent(v));
-    $('res').innerHTML = rows.map(function(r){
-      return '<div class="item"><div class="who"><div class="nm">'+esc(r.name)+'</div><div class="meta">'+(r.cpf||'sem CPF')+'</div></div>'+
-        (r.checked_in?'<span class="tag ok">presente</span>':'<button class="btn btn-sm btn-gold" onclick="toggle('+r.id+',false)">Marcar presença</button>')+'</div>';
-    }).join('') || '<div class="muted small">Nenhum cadastro com esse nome.</div>';
-    if($('nName') && !rows.length) $('nName').value = v.toUpperCase();
+    var rows = await api('/interno/api/atiradores/busca?q='+encodeURIComponent(term));
+    var h = rows.map(function(r){
+      var right = r.checked_in ? '<span class="tag ok">presente</span>'
+        : '<button class="btn btn-sm btn-gold" onclick="pick('+r.id+')">Marcar presença</button>';
+      return '<div class="item" id="row'+r.id+'"><div class="who"><div class="nm">'+esc(r.name)+'</div>'+
+        '<div class="meta">'+(r.has_cpf ? esc(r.cpf) : '<span style="color:#f0c060">sem CPF — vai pedir ao marcar</span>')+'</div></div>'+right+'</div>';
+    }).join('');
+    if(CAN_CREATE && term.length>=3){
+      h += '<div class="item newrow"><div class="who"><div class="nm">'+esc(term.toUpperCase())+'</div>'+
+        '<div class="meta">'+(rows.length?'Não é nenhum dos acima?':'Nenhum cadastro com esse nome.')+' Cadastre com CPF.</div></div>'+
+        '<button class="btn btn-sm btn-gold" onclick="askNew()">➕ Cadastrar novo</button></div>';
+    } else if(!rows.length){
+      h += '<div class="muted small">Nenhum cadastro com esse nome.</div>';
+    }
+    $('res').innerHTML = h;
   }catch(e){}
 }
-async function toggle(id, remove){
-  try{ var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id, remove:remove}); PARTS=d.participants; renderList(); toast(remove?'Removido.':'Presença marcada ✔'); search($('q').value); }
+
+/* --------- marcar presença (pede CPF se faltar) --------- */
+async function pick(id){
+  try{
+    var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id});
+    if(d.need_cpf){ askCPF(id, d.name); return; }
+    PARTS=d.participants; renderList(); toast('Presença marcada ✔'); search($('q').value);
+  }catch(e){ toast(e.message, true); }
+}
+function askCPF(id, name){
+  var row = $('row'+id);
+  if(!row){ toast('Busque o atirador para informar o CPF.', true); return; }
+  if($('cpf'+id)) { $('cpfin'+id).focus(); return; }
+  row.insertAdjacentHTML('afterend',
+    '<div class="cpfbox" id="cpf'+id+'"><div class="nm">'+esc(name)+'</div>'+
+    '<div class="why">Este cadastro está sem CPF. Informe para marcar a presença — é assim que evitamos dois cadastros da mesma pessoa.</div>'+
+    '<div class="row"><div><label>CPF</label><input type="text" id="cpfin'+id+'" inputmode="numeric" placeholder="000.000.000-00" autocomplete="off"></div>'+
+    '<div style="flex:0"><button class="btn btn-gold" onclick="saveCPF('+id+')">✔ Confirmar e marcar</button></div></div></div>');
+  var el=$('cpfin'+id); bindCPF(el); el.focus();
+  el.addEventListener('keydown', function(ev){ if(ev.key==='Enter') saveCPF(id); });
+}
+async function saveCPF(id){
+  var v=$('cpfin'+id).value;
+  if(!validCPF(v)){ toast('CPF inválido — confira os números.', true); return; }
+  try{
+    var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id, cpf:v});
+    if(d.need_cpf){ toast('CPF não foi aceito.', true); return; }
+    PARTS=d.participants; renderList(); toast('CPF salvo e presença marcada ✔'); search($('q').value);
+  }catch(e){ toast(e.message, true); }
+}
+async function removeP(id){
+  try{ var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id, remove:true});
+    PARTS=d.participants; renderList(); toast('Removido.'); search($('q').value); }
   catch(e){ toast(e.message, true); }
+}
+
+/* --------- cadastrar novo (só depois de buscar) --------- */
+function askNew(){
+  if($('newbox')){ $('nCpf').focus(); return; }
+  var name = $('q').value.trim().toUpperCase();
+  $('res').insertAdjacentHTML('beforeend',
+    '<div class="cpfbox" id="newbox"><div class="nm">Novo atirador</div>'+
+    '<div class="why">Confira o nome completo e informe o CPF (obrigatório).</div>'+
+    '<div class="row"><div><label>Nome completo</label><input type="text" id="nName" style="text-transform:uppercase" autocomplete="off"></div>'+
+    '<div><label>CPF</label><input type="text" id="nCpf" inputmode="numeric" placeholder="000.000.000-00" autocomplete="off"></div>'+
+    '<div style="flex:0"><button class="btn btn-gold" onclick="createShooter(false)">➕ Cadastrar e inscrever</button></div></div></div>');
+  $('nName').value = name; bindCPF($('nCpf')); $('nCpf').focus();
+  $('nCpf').addEventListener('keydown', function(ev){ if(ev.key==='Enter') createShooter(false); });
 }
 async function createShooter(force){
   var name=$('nName').value.trim(), cpf=$('nCpf').value.trim();
   if(name.length<3){ toast('Nome muito curto.', true); return; }
+  if(!validCPF(cpf)){ toast('CPF inválido — confira os números.', true); return; }
   try{
     var d = await api('/interno/api/atiradores/novo', {name:name, cpf:cpf, checkin:true, force:force});
-    if(!d.ok && d.duplicate){ if(confirm('Já existe "'+d.duplicate.name+'". Marcar presença dele em vez de cadastrar de novo?')){ toggle(d.duplicate.id,false); } else if(confirm('Cadastrar mesmo assim como pessoa diferente?')){ createShooter(true); } return; }
-    $('nName').value=''; $('nCpf').value=''; $('q').value=''; $('res').innerHTML='';
+    if(!d.ok && d.duplicate){
+      if(confirm('Já existe "'+d.duplicate.name+'" com esse nome. Marcar presença dele?')){ pick(d.duplicate.id); return; }
+      if(!confirm('Cadastrar mesmo assim como pessoa diferente?')) return;
+      return createShooter(true);
+    }
+    $('q').value=''; $('res').innerHTML='';
     var p = await api('/interno/api/linha/dados').catch(function(){return null;});
-    if(p && p.participants){ PARTS=p.participants; } else { PARTS.push({id:d.id,name:d.name,runs:0,by_modality:{}}); }
+    if(p && p.participants) PARTS=p.participants; else PARTS.push({id:d.id,name:d.name,runs:0,by_modality:{}});
     renderList(); toast(d.name+' cadastrado e presente ✔');
   }catch(e){ toast(e.message, true); }
 }
+
+/* --------- cobrança --------- */
 async function renderBill(){
   try{ var rows = await api('/interno/api/inscricoes/cobranca');
     $('bill').querySelector('tbody').innerHTML = rows.map(function(p){
@@ -108,6 +184,7 @@ async function renderBill(){
   }catch(e){}
 }
 renderList();
-setInterval(function(){ if(!$('tabBill').classList.contains('hide')) renderBill(); else api('/interno/api/linha/dados').then(function(p){ if(p.participants){PARTS=p.participants; renderList();} }).catch(function(){}); }, 20000);
+setInterval(function(){ if(!$('tabBill').classList.contains('hide')) renderBill();
+  else if(!$('q').value.trim()) api('/interno/api/linha/dados').then(function(p){ if(p.participants){PARTS=p.participants; renderList();} }).catch(function(){}); }, 20000);
 </script>
 {% endblock %}
