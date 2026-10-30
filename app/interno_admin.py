@@ -53,10 +53,28 @@ async def etapas(request: Request):
             "SELECT * FROM months WHERE status='fechado' ORDER BY year DESC, month DESC "
             "LIMIT 12").fetchall()
         has_open = any(r["s"]["status"] == "aberta" for r in rows)
+        best_max, min_discard = webdb.get_rule(conn)
+        rule_preview = [(h, st.best_n_for(h, best_max, min_discard)) for h in range(1, 7)]
         return render(request, conn, "etapas.html", user, perms, month=month, rows=rows,
+                      best_max=best_max, min_discard=min_discard, rule_preview=rule_preview,
                       has_open=has_open, closed_months=closed, month_pt=MONTH_PT,
                       n_held=len(st.month_held_stages(conn, month["id"])),
                       best_n=st.monthly_best_n(conn, month["id"]))
+    finally:
+        conn.close()
+
+
+@router.post("/regra-mes")
+async def regra_mes(request: Request, best_max: int = Form(3), min_discard: int = Form(1)):
+    conn = db.get_conn()
+    try:
+        need(request, conn, "admin")
+        if not (0 <= best_max <= 20 and 0 <= min_discard <= 10):
+            return back("/interno/etapas", "Valores fora do limite.")
+        webdb.set_rule(conn, best_max, min_discard)
+        conn.commit()
+        log.info("Regra do mês alterada: máximo %s, descarte mínimo %s", best_max, min_discard)
+        return back("/interno/etapas", "Regra atualizada. Vale para o mês aberto e os próximos.")
     finally:
         conn.close()
 
@@ -179,6 +197,7 @@ async def mes_fechar_post(request: Request):
             return back("/interno/etapas", "Feche a etapa aberta antes de fechar o mês.")
         prop = st.promotion_proposal(conn, month["id"])
         st.apply_promotions(conn, prop["moves"])
+        webdb.freeze_month_rule(conn, month["id"])
         conn.execute("UPDATE months SET status='fechado' WHERE id=?", (month["id"],))
         conn.commit()
         db.ensure_current_month(conn)

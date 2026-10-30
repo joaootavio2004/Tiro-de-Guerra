@@ -102,7 +102,7 @@ def monthly_class_text(month_label: str, modality: str, category: str,
                        rows: List[Dict[str, Any]]) -> str:
     head = (f"🏆 *Classificação do mês — {month_label}*\n"
             f"*{modality_label(modality)} · {category}*\n"
-            f"_(soma das melhores etapas, até 3)_\n")
+            f"_(soma das melhores etapas do mês)_\n")
     if not rows:
         return head + "\n_Sem pontuação ainda._"
     lines = [head]

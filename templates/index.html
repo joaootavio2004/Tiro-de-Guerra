@@ -50,7 +50,7 @@
     <p class="hero-sub">
       {% if n_stages %}
         {{ n_stages }} etapa{{ 's' if n_stages != 1 }} realizada{{ 's' if n_stages != 1 }}{% if stage_dates %} — {{ stage_dates|join(', ') }}{% endif %}.
-        A classificação soma as melhores etapas de cada atirador no mês (até 3).
+        A classificação soma as melhores etapas de cada atirador no mês.
       {% else %}
         Ainda não há etapas com resultado neste mês.
       {% endif %}

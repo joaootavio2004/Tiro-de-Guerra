@@ -2,7 +2,7 @@
 {% block title %}Etapas{% endblock %}
 {% block content %}
 <h1 class="pg">Etapas — {{ month_pt[month.month] }} {{ month.year }}</h1>
-<p class="lead">Mês aberto. {{ n_held }} etapa{{ 's' if n_held != 1 }} realizada{{ 's' if n_held != 1 }}; no mês contam as {{ best_n }} melhores. Só pode haver uma etapa aberta por vez.</p>
+<p class="lead">Mês aberto. {{ n_held }} etapa{{ 's' if n_held != 1 }} realizada{{ 's' if n_held != 1 }}; no mês contam as {{ best_n }} melhores (regra configurável abaixo). Só pode haver uma etapa aberta por vez.</p>
 <div class="grid2">
   <form class="box" method="post" action="/interno/etapas/nova">
     <h2>Nova etapa</h2>
@@ -20,6 +20,18 @@
     <a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=geral">{{ ic('trophy') }} PDF geral do mês</a>
   </div>
 </div>
+<form class="box" method="post" action="/interno/regra-mes"
+      onsubmit="return confirm('Alterar a regra? A classificação do mês aberto é recalculada na hora; meses fechados não mudam.')">
+  <h2>Etapas que contam no mês</h2>
+  <p class="muted small" style="margin:0 0 14px">Na classificação mensal somam-se as melhores etapas de cada atirador. Vale para o mês aberto e os seguintes; cada mês fechado guarda a regra com que foi apurado.</p>
+  <div class="frow">
+    <div><label>Máximo de etapas que contam (0 = todas)</label><input type="number" name="best_max" min="0" max="20" value="{{ best_max }}" required></div>
+    <div><label>Descartar no mínimo</label><input type="number" name="min_discard" min="0" max="10" value="{{ min_discard }}" required></div>
+    <div><button class="btn btn-gold btn-block">{{ ic('save') }} Salvar regra</button></div>
+  </div>
+  <table class="plain" style="margin-top:14px"><thead><tr><th>Etapas no mês</th>{% for h, n in rule_preview %}<th class="num" style="text-align:center">{{ h }}</th>{% endfor %}</tr></thead>
+    <tbody><tr><td>Contam</td>{% for h, n in rule_preview %}<td class="num" style="text-align:center"><b>{{ n }}</b></td>{% endfor %}</tr></tbody></table>
+</form>
 <div class="box">
   <h2>Etapas do mês</h2>
   {% for r in rows %}

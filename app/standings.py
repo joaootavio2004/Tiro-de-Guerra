@@ -62,13 +62,20 @@ def count_held_stages(conn, month_id: int, modality: str = None) -> int:
     return len(month_held_stages(conn, month_id))
 
 
+def best_n_for(held: int, best_max: int, min_discard: int) -> int:
+    """Quantas etapas contam: as MELHORES, descartando no mínimo `min_discard`
+    e contando no máximo `best_max` (0 = sem máximo). Sempre conta ao menos 1.
+    Padrão (3, 1): 3 etapas -> 2; 4 -> 3; 5 -> 3."""
+    n = max(1, held - min_discard)
+    return min(best_max, n) if best_max else n
+
+
 def monthly_best_n(conn, month_id: int, modality: str = None) -> int:
-    """Quantas etapas contam no mês: as MELHORES, no máximo 3.
-    Meses curtos descartam a pior (mín. 1).
-    Ex.: 3 etapas -> contam 2; 4 etapas -> contam 3; 5 etapas -> contam 3.
-    Vale igual para pistola e carabina."""
+    """Quantas etapas contam no mês, pela regra do mês (configurável pelo
+    admin; congelada quando o mês fecha). Vale igual para todas as armas."""
+    from . import webdb
     held = len(month_held_stages(conn, month_id))
-    return min(3, max(1, held - 1))
+    return best_n_for(held, *webdb.month_rule(conn, month_id))
 
 
 def monthly_classification(conn, month_id: int, modality: str,

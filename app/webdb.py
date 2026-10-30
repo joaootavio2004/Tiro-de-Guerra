@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS stage_checkins (
     PRIMARY KEY (stage_id, shooter_id)
 );
 
+-- configurações do clube editáveis pelo admin (chave/valor)
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS run_shots (
     run_id INTEGER NOT NULL,
     idx    INTEGER NOT NULL,
@@ -71,7 +77,58 @@ def migrate(conn) -> None:
         conn.execute("ALTER TABLE runs ADD COLUMN segments INTEGER")
     if "created_by_user" not in cols:
         conn.execute("ALTER TABLE runs ADD COLUMN created_by_user INTEGER")
+    # regra do mês congelada no fechamento (meses fechados nunca recalculam)
+    mcols = [r["name"] for r in conn.execute("PRAGMA table_info(months)")]
+    if "rule_best_max" not in mcols:
+        conn.execute("ALTER TABLE months ADD COLUMN rule_best_max INTEGER")
+        conn.execute("ALTER TABLE months ADD COLUMN rule_min_discard INTEGER")
+        # meses já fechados foram apurados com a regra fixa antiga (até 3, descarta 1)
+        conn.execute("UPDATE months SET rule_best_max=3, rule_min_discard=1 "
+                     "WHERE status='fechado'")
     conn.commit()
+
+
+# ----------------------------------------------------------------------------
+# Regra do mês: quantas etapas contam
+# ----------------------------------------------------------------------------
+RULE_DEFAULT = (3, 1)  # (máximo de etapas que contam; 0 = todas, descarte mínimo)
+
+
+def get_rule(conn) -> tuple:
+    """Regra vigente (vale para o mês aberto e os próximos)."""
+    try:
+        rows = dict(conn.execute(
+            "SELECT key, value FROM settings WHERE key IN "
+            "('rule_best_max','rule_min_discard')").fetchall())
+    except Exception:  # banco ainda sem a tabela (antes da migração)
+        rows = {}
+    return (int(rows.get("rule_best_max", RULE_DEFAULT[0])),
+            int(rows.get("rule_min_discard", RULE_DEFAULT[1])))
+
+
+def set_rule(conn, best_max: int, min_discard: int) -> None:
+    for k, v in (("rule_best_max", best_max), ("rule_min_discard", min_discard)):
+        conn.execute("INSERT INTO settings(key,value) VALUES (?,?) "
+                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (k, str(int(v))))
+
+
+def month_rule(conn, month_id: int) -> tuple:
+    """Regra de um mês: a congelada (mês fechado) ou a vigente."""
+    try:
+        r = conn.execute("SELECT rule_best_max, rule_min_discard FROM months WHERE id=?",
+                         (month_id,)).fetchone()
+    except Exception:
+        r = None
+    if r and r["rule_best_max"] is not None:
+        return (r["rule_best_max"], r["rule_min_discard"])
+    return get_rule(conn)
+
+
+def freeze_month_rule(conn, month_id: int) -> None:
+    """Grava no mês a regra vigente. Chamar ao fechar o mês."""
+    best_max, min_discard = get_rule(conn)
+    conn.execute("UPDATE months SET rule_best_max=?, rule_min_discard=? WHERE id=?",
+                 (best_max, min_discard, month_id))
 
 
 # ----------------------------------------------------------------------------

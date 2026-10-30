@@ -12,7 +12,7 @@ from telegram.constants import ParseMode
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                           MessageHandler, ContextTypes, filters)
 
-from . import config, db, texts, util
+from . import config, db, texts, util, webdb
 from . import standings as st
 
 log = logging.getLogger("bot")
@@ -1973,6 +1973,7 @@ async def admin_month_confirm(update, context):
     conn = db.get_conn()
     try:
         st.apply_promotions(conn, moves)
+        webdb.freeze_month_rule(conn, month_id)
         conn.execute("UPDATE months SET status='fechado' WHERE id=?", (month_id,))
         conn.commit()
         db.ensure_current_month(conn)
