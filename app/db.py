@@ -221,8 +221,14 @@ def init_db() -> None:
             conn.execute("ALTER TABLE categories ADD COLUMN entry INTEGER "
                          "NOT NULL DEFAULT 0")
 
-        # Carga inicial de categorias (só cria as que não existem)
+        # Carga inicial de categorias: só para modalidade que ainda não tem
+        # NENHUMA categoria. Antes, a categoria padrão renomeada ou excluída
+        # pelo admin voltava a cada reinício (e como inicial, duplicando-a).
         for name, modality, rank, mx, up, down, entry in DEFAULT_CATEGORIES:
+            if conn.execute("SELECT 1 FROM categories WHERE modality=? AND NOT "
+                            "(name=? AND modality=?) LIMIT 1",
+                            (modality, name, modality)).fetchone():
+                continue
             conn.execute(
                 "INSERT OR IGNORE INTO categories"
                 "(name, modality, rank, active, max_shooters, promote_n, "
@@ -252,11 +258,12 @@ def init_db() -> None:
                     conn.execute("UPDATE categories SET entry=1 WHERE id=?",
                                  (cats[0]["id"],))
 
-        # --- modalidades (tipos) ---
-        for code, label, sort in DEFAULT_MODALITIES:
-            conn.execute(
-                "INSERT OR IGNORE INTO modalities(code,label,sort,active) "
-                "VALUES (?,?,?,1)", (code, label, sort))
+        # --- modalidades (tipos): padrão só num banco sem nenhuma ---
+        if not conn.execute("SELECT 1 FROM modalities LIMIT 1").fetchone():
+            for code, label, sort in DEFAULT_MODALITIES:
+                conn.execute(
+                    "INSERT OR IGNORE INTO modalities(code,label,sort,active) "
+                    "VALUES (?,?,?,1)", (code, label, sort))
         # registra modalidades que só existem nas categorias (bancos antigos)
         for r in conn.execute("SELECT DISTINCT modality FROM categories"):
             conn.execute(
@@ -276,6 +283,18 @@ def init_db() -> None:
                     conn.execute(
                         "INSERT OR IGNORE INTO role_permissions(role_code,perm) "
                         "VALUES (?,?)", (code, p))
+
+        # uma única categoria inicial por modalidade: se houver mais de uma,
+        # fica a que tem mais atiradores (empate: a mais antiga)
+        for r in conn.execute("SELECT modality FROM categories WHERE active=1 AND entry=1 "
+                              "GROUP BY modality HAVING COUNT(*) > 1").fetchall():
+            keep = conn.execute(
+                "SELECT c.id FROM categories c LEFT JOIN shooter_modality sm "
+                "ON sm.category_id=c.id WHERE c.modality=? AND c.active=1 AND c.entry=1 "
+                "GROUP BY c.id ORDER BY COUNT(sm.shooter_id) DESC, c.id LIMIT 1",
+                (r["modality"],)).fetchone()["id"]
+            conn.execute("UPDATE categories SET entry=0 WHERE modality=? AND id<>?",
+                         (r["modality"], keep))
 
         conn.commit()
         ensure_current_month(conn)
@@ -729,7 +748,7 @@ def default_category_id(conn, modality: str) -> Optional[int]:
     usa a mais baixa (rank menor) da modalidade."""
     row = conn.execute(
         "SELECT id FROM categories WHERE active=1 AND modality=? AND entry=1 "
-        "LIMIT 1", (modality,)).fetchone()
+        "ORDER BY id LIMIT 1", (modality,)).fetchone()
     if row:
         return row["id"]
     row = conn.execute(

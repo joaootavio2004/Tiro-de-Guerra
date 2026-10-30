@@ -350,3 +350,58 @@ def participation_stats(conn) -> Dict[str, Any]:
         m["shooters"] = len(m["shooters"])
         out_months.append(m)
     return {"stages": out_stages, "months": out_months}
+
+
+# ----------------------------------------------------------------------------
+# Limpeza de cadastros por arma criados sem uso
+# ----------------------------------------------------------------------------
+# Até a correção de _resolve_category, abrir um atirador na linha de tiro o
+# cadastrava na categoria inicial de TODAS as armas. Só é removido o vínculo
+# que (a) está na categoria inicial da arma e (b) não tem nenhuma inscrição
+# naquela arma: removê-lo não muda nada, pois a primeira passada real o
+# coloca de novo na mesma categoria. Categorias escolhidas pelo admin
+# (diferentes da inicial) e meses fechados não são tocados.
+_ORPHAN_WHERE = (
+    "sm.category_id = (SELECT id FROM categories c WHERE c.modality=sm.modality "
+    "  AND c.active=1 AND c.entry=1 ORDER BY c.id LIMIT 1) "
+    "AND NOT EXISTS (SELECT 1 FROM enrollments e WHERE e.shooter_id=sm.shooter_id "
+    "  AND e.modality=sm.modality)")
+
+
+def orphan_memberships(conn) -> List[Dict[str, Any]]:
+    """Quantos vínculos sem uso há por arma/categoria (prévia da limpeza)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT sm.modality, c.name AS category, COUNT(*) AS n "
+        "FROM shooter_modality sm JOIN categories c ON c.id=sm.category_id "
+        f"WHERE {_ORPHAN_WHERE} GROUP BY sm.modality, c.name ORDER BY sm.modality")]
+
+
+def backup_db(conn, folder: str) -> str:
+    """Cópia consistente do banco (API de backup do SQLite) antes de limpezas."""
+    import os
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, f"tiro_guerra_{datetime.now():%Y%m%d_%H%M%S}.db")
+    import sqlite3
+    dest = sqlite3.connect(path)
+    try:
+        conn.backup(dest)
+    finally:
+        dest.close()
+    return path
+
+
+def clean_orphan_memberships(conn, modality: str) -> int:
+    """Remove os vínculos sem uso de UMA arma e o retrato deles no mês ABERTO.
+    Por arma porque vínculos antigos (importados da planilha, sem inscrição
+    no sistema) também aparecem como "sem uso": o admin decide quais limpar."""
+    rows = conn.execute(
+        "SELECT sm.shooter_id, sm.modality FROM shooter_modality sm "
+        f"WHERE sm.modality=? AND {_ORPHAN_WHERE}", (modality,)).fetchall()
+    open_months = [r["id"] for r in conn.execute("SELECT id FROM months WHERE status='aberto'")]
+    for r in rows:
+        conn.execute("DELETE FROM shooter_modality WHERE shooter_id=? AND modality=?",
+                     (r["shooter_id"], r["modality"]))
+        for mid in open_months:
+            conn.execute("DELETE FROM month_category WHERE month_id=? AND shooter_id=? "
+                         "AND modality=?", (mid, r["shooter_id"], r["modality"]))
+    return len(rows)

@@ -56,6 +56,8 @@ def open_stage_payload(conn):
     if not stage:
         return {"open": False}
     sections = []
+    single = {m["code"]: len(db.list_categories(conn, m["code"])) == 1
+              for m in db.list_modalities(conn)}
     for modality, cat in section_order(conn):
         cat_name = cat["name"]
         enrolls = conn.execute(
@@ -83,7 +85,8 @@ def open_stage_payload(conn):
         sections.append({
             "id": f"{modality}-{cat['id']}",
             "modality_label": texts.modality_label(modality),
-            "category": cat_name, "rows": rows, "pending": pending,
+            "category": cat_name, "single": single.get(modality, False),
+            "rows": rows, "pending": pending,
         })
     return {
         "open": True,
@@ -140,6 +143,8 @@ def build_sections(conn, month_id):
                 "modality": mcode,
                 "modality_label": mlabel,
                 "category": cat["name"],
+                # modalidade com categoria única: a tela mostra só a modalidade
+                "single": len(cats) == 1,
                 "combined": False,
                 "table": table,
             })

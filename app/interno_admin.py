@@ -1,10 +1,11 @@
 """Área interna — páginas de administração (etapas, categorias, usuários)."""
 import logging
+import os
 
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import HTMLResponse, Response
 
-from . import db, texts, webdb, report
+from . import config, db, texts, webdb, report
 from . import standings as st
 from .interno import need, render, back, stage_label
 from .website import MONTH_PT
@@ -240,7 +241,28 @@ async def categorias(request: Request):
                 cats.append({"c": c, "members": db.category_member_count(conn, c["id"]),
                              "in_use": db.category_in_use(conn, c["id"])})
             mods.append({"m": m, "cats": cats, "in_use": db.modality_in_use(conn, m["code"])})
-        return render(request, conn, "categorias.html", user, perms, mods=mods)
+        orphans = webdb.orphan_memberships(conn)
+        for o in orphans:
+            o["label"] = texts.modality_label(o["modality"])
+        return render(request, conn, "categorias.html", user, perms, mods=mods, orphans=orphans)
+    finally:
+        conn.close()
+
+
+@router.post("/categorias/limpar-sem-uso")
+async def categorias_limpar(request: Request, modality: str = Form("")):
+    conn = db.get_conn()
+    try:
+        need(request, conn, "admin")
+        if not db.get_modality(conn, modality):
+            return back("/interno/categorias", "Modalidade inválida.")
+        path = webdb.backup_db(conn, os.path.join(os.path.dirname(config.DB_PATH), "backups"))
+        n = webdb.clean_orphan_memberships(conn, modality)
+        conn.commit()
+        log.info("Limpeza de vínculos sem uso (%s): %d removido(s). Backup em %s",
+                 modality, n, path)
+        return back("/interno/categorias",
+                    f"{texts.modality_label(modality)}: {n} cadastro(s) sem uso removido(s). Backup feito antes.")
     finally:
         conn.close()
 

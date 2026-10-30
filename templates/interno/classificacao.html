@@ -2,7 +2,7 @@
 {% block title %}Classificação{% endblock %}
 {% block content %}
 <h1 class="pg">Classificação</h1>
-<p class="lead">Mesmos números do site público. Menor tempo da categoria vale 100 pontos; no mês contam as melhores etapas (descarta a pior).</p>
+<p class="lead">Mesmos números do site público. Menor tempo da categoria vale 100 pontos; no mês contam as melhores etapas de cada atirador (até 3).</p>
 <div class="sub-tabs">
   <button class="on" onclick="tab(this,'tEtapa')">{{ ic('target') }} Etapa aberta</button>
   <button onclick="tab(this,'tMes')">{{ ic('trophy') }} Mês</button>
@@ -11,7 +11,7 @@
   {% if not open_stage %}<div class="box muted">Não há etapa aberta.</div>{% endif %}
   {% for s in stage_secs %}
   <div class="box">
-    <h2>{{ s.modality }} · {{ s.category }}</h2>
+    <h2>{{ s.modality }}{% if s.category %} · {{ s.category }}{% endif %}</h2>
     <table class="plain"><thead><tr><th style="width:36px">#</th><th>Atirador</th><th style="text-align:right">Tempo</th><th style="text-align:right">Pontos</th></tr></thead><tbody>
       {% for r in s.rows %}<tr><td class="num">{{ r.pos }}</td><td>{{ r.shooter_name }}</td><td class="num" style="text-align:right">{{ '%.2fs'|format(r.time) if r.time else 'DQ' }}</td><td class="num" style="text-align:right"><b>{{ '%.2f'|format(r.points) }}</b></td></tr>{% endfor %}
     </tbody></table>
@@ -25,7 +25,7 @@
   </form>
   {% for s in month_secs %}
   <div class="box">
-    <h2>{{ s.modality }} · {{ s.category }} <span class="tag">conta {{ s.table.best_n }} de {{ s.table.stages|length }}</span></h2>
+    <h2>{{ s.modality }}{% if s.category %} · {{ s.category }}{% endif %} <span class="tag">conta {{ s.table.best_n }} de {{ s.table.stages|length }}</span></h2>
     <div class="tbl-scroll"><table class="plain"><thead><tr><th style="width:36px">#</th><th>Atirador</th>{% for et in s.table.stages %}<th style="text-align:right">{{ et.number }}ª<br><span class="muted" style="font-weight:400">{{ fmt_date_short(et.date) }}</span></th>{% endfor %}<th style="text-align:right">Total</th></tr></thead><tbody>
       {% for r in s.table.rows %}<tr><td class="num">{{ r.pos }}</td><td>{{ r.name }}</td>{% for c in r.cells %}<td class="num" style="text-align:right;{% if c.dropped %}opacity:.45;text-decoration:line-through{% endif %}">{% if c.present %}{{ '%.2f'|format(c.points) }}<br><span class="muted" style="font-size:11px">{{ c.time }}s</span>{% else %}—{% endif %}</td>{% endfor %}<td class="num" style="text-align:right"><b>{{ '%.2f'|format(r.total) }}</b></td></tr>{% endfor %}
     </tbody></table></div>

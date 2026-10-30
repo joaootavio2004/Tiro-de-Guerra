@@ -21,8 +21,8 @@ Este guia foi escrito passo a passo, **sem exigir conhecimento de programação*
 
 A pontuação é idêntica à da sua planilha antiga:
 o menor tempo de cada categoria vale **100 pontos** e os demais recebem
-`(menor tempo ÷ seu tempo) × 100`. No mês, somam-se todas as etapas
-**descartando a pior** (4 etapas → contam 3; 5 etapas → contam 4; 3 → contam 2).
+`(menor tempo ÷ seu tempo) × 100`. No mês, somam-se as etapas
+**contando as melhores, no máximo 3** (3 etapas → contam 2; 4 etapas → contam 3; 5 etapas → contam 3).
 Penalidades são segundos somados ao tempo; DQ zera a etapa.
 
 > A situação atual (atiradores, categorias e as etapas de junho) **já vem carregada**.

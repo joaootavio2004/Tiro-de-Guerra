@@ -39,4 +39,16 @@
   <div><label>Nova modalidade (tipo de arma)</label><input type="text" name="label" placeholder="Ex.: Carabina .22" required></div>
   <div><button class="btn btn-gold btn-block">{{ ic('plus') }} Criar modalidade</button></div>
 </form>
+{% if orphans %}
+<div class="box warn">
+  <h2>Cadastros sem uso</h2>
+  <p class="muted small" style="margin:0 0 12px">Atiradores vinculados à categoria inicial de uma arma em que nunca tiveram inscrição no sistema. A maioria foi criada automaticamente ao abrir o atirador na linha de tiro (erro já corrigido) e infla a contagem de membros; alguns podem vir da importação da planilha antiga. Removê-los não altera resultados: na primeira passada real naquela arma, o atirador volta para a mesma categoria inicial. Um backup do banco é feito antes de cada remoção.</p>
+  <table class="plain"><thead><tr><th>Arma</th><th>Categoria</th><th style="text-align:right">Sem uso</th><th></th></tr></thead><tbody>
+  {% for o in orphans %}<tr><td>{{ o.label }}</td><td>{{ o.category }}</td><td class="num" style="text-align:right">{{ o.n }}</td>
+    <td style="text-align:right"><form class="inline" method="post" action="/interno/categorias/limpar-sem-uso"
+      onsubmit="return confirm('Remover {{ o.n }} cadastro(s) sem uso de {{ o.label }}?')"><input type="hidden" name="modality" value="{{ o.modality }}">
+      <button class="btn btn-sm btn-danger">{{ ic('trash') }} Remover</button></form></td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% endif %}
 {% endblock %}

@@ -114,7 +114,7 @@
       <h2>{{ s.category }}</h2>
       <div class="rule">
         {% if s.table.stages|length <= 1 %}{{ s.table.stages|length }} etapa
-        {% else %}Conta {{ s.table.best_n }} de {{ s.table.stages|length }} etapas · descarta a pior{% endif %}
+        {% else %}Contam as {{ s.table.best_n }} melhores de {{ s.table.stages|length }} etapas{% endif %}
       </div>
     </div>
     <table>

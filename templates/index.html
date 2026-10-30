@@ -50,7 +50,7 @@
     <p class="hero-sub">
       {% if n_stages %}
         {{ n_stages }} etapa{{ 's' if n_stages != 1 }} realizada{{ 's' if n_stages != 1 }}{% if stage_dates %} — {{ stage_dates|join(', ') }}{% endif %}.
-        A classificação soma as etapas do mês, descartando a pior de cada atirador.
+        A classificação soma as melhores etapas de cada atirador no mês (até 3).
       {% else %}
         Ainda não há etapas com resultado neste mês.
       {% endif %}
@@ -72,7 +72,7 @@
     <a class="tab" href="/estatisticas" style="text-decoration:none">📈 Estatísticas do atirador</a>
     {% for s in sections %}
     <button class="tab" data-target="{{ s.id }}" role="tab">
-      <span class="mod">{{ s.modality_label }}</span> · {{ s.category }}
+      {% if s.single %}{{ s.modality_label }}{% else %}<span class="mod">{{ s.modality_label }}</span> · {{ s.category }}{% endif %}
     </button>
     {% endfor %}
   </nav>
@@ -83,14 +83,15 @@
     <div class="card">
       <div class="card-head">
         <div>
-          <div class="mod">{{ s.modality_label }}</div>
-          <h2>{{ s.category }}</h2>
+          {% if s.single %}<div class="mod">Categoria única</div>
+          <h2>{{ s.modality_label }}</h2>{% else %}<div class="mod">{{ s.modality_label }}</div>
+          <h2>{{ s.category }}</h2>{% endif %}
         </div>
         <div class="rule">
           {% if s.table.stages|length <= 1 %}
             {{ s.table.stages|length }} etapa realizada
           {% else %}
-            Conta {{ s.table.best_n }} de {{ s.table.stages|length }} etapas (descarta a pior)
+            Contam as {{ s.table.best_n }} melhores de {{ s.table.stages|length }} etapas
           {% endif %}
         </div>
       </div>

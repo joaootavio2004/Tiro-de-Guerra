@@ -621,11 +621,13 @@ async def classificacao(request: Request, mes: int = None):
                 if stage:
                     rows = st.stage_classification(conn, stage["id"], m["code"], c["id"])
                     if rows:
-                        stage_secs.append({"modality": m["label"], "category": c["name"],
+                        stage_secs.append({"modality": m["label"],
+                                           "category": c["name"] if len(cats) > 1 else None,
                                            "rows": rows})
                 t = st.monthly_table(conn, month["id"], m["code"], c["id"])
                 if t["rows"]:
-                    month_secs.append({"modality": m["label"], "category": c["name"],
+                    month_secs.append({"modality": m["label"],
+                                       "category": c["name"] if len(cats) > 1 else None,
                                        "table": t})
         return render(request, conn, "classificacao.html", user, perms,
                       stage_secs=stage_secs, month_secs=month_secs,

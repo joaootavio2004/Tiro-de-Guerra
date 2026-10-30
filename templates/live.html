@@ -65,8 +65,8 @@
   function panelHTML(sec){
     var head =
       '<div class="card-head"><div>' +
-        '<div class="mod">'+esc(sec.modality_label)+'</div>' +
-        '<h2>'+esc(sec.category)+'</h2>' +
+        (sec.single ? '<div class="mod">Categoria única</div><h2>'+esc(sec.modality_label)+'</h2>'
+                    : '<div class="mod">'+esc(sec.modality_label)+'</div><h2>'+esc(sec.category)+'</h2>') +
       '</div></div>';
     var body;
     if(sec.rows && sec.rows.length){
@@ -121,7 +121,7 @@
     tabsHTML += data.sections.map(function(s){
       var a = s.id===activeId ? ' active' : '';
       return '<button class="tab'+a+'" data-target="'+s.id+'">' +
-        '<span class="mod">'+esc(s.modality_label)+'</span> · '+esc(s.category)+'</button>';
+        (s.single ? esc(s.modality_label) : '<span class="mod">'+esc(s.modality_label)+'</span> · '+esc(s.category))+'</button>';
     }).join('');
     tabs.innerHTML = tabsHTML;
 
