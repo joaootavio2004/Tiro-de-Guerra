@@ -20,18 +20,22 @@ etapa.
 
 ## Implantação no Coolify
 
-1. Recurso do tipo **Docker Compose** apontando para este repositório.
-2. **Domínios** do serviço `app` (porta **8000**), separados por vírgula:
+1. Recurso do tipo **Application** com build por **Dockerfile**, apontando para
+   este repositório (ramo `main`), porta exposta **8000**. O
+   `docker-compose.yml` serve só para rodar fora do Coolify.
+2. **Domínios** (separados por vírgula):
    `https://tirodeguerra.com.br,https://admin.tirodeguerra.com.br`.
-   Os dois precisam de registro DNS apontando para o servidor.
+   Os dois precisam de registro DNS apontando para o servidor. Inclua o
+   subdomínio **antes** de publicar uma versão com `ADMIN_HOST` ativo, pois o
+   endereço antigo `/interno` passa a redirecionar para ele.
 3. **Variáveis de ambiente**:
    - `ADMIN_PASSWORD`: senha do primeiro login (usuário `admin`). Só é usada se
      ainda não existir nenhum usuário. Sem ela, a senha gerada aparece no log.
    - `ADMIN_HOST`: domínio da área interna (padrão `admin.tirodeguerra.com.br`).
    - `SITE_URL`: endereço público, impresso no QR do cupom térmico.
    - Opcionais: `CLUB_NAME`, `TZ`, `DB_PATH`.
-4. **Volume persistente**: `tiroguerra_data` em `/app/data` (banco, backups das
-   limpezas e, futuramente, fotos). Configure cópia periódica desse volume.
+4. **Volume persistente** em `/app/data` (banco, backups das limpezas e,
+   futuramente, fotos). Configure cópia periódica desse volume.
 5. **Deploy**. No primeiro start com volume vazio, o histórico de `seed/` é
    carregado. Para começar do zero, apague `seed/` antes de implantar.
 
