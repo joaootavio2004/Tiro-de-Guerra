@@ -18,6 +18,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Request, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+from markupsafe import Markup
 
 from . import config, db, texts, util, webdb
 from . import standings as st
@@ -28,16 +29,26 @@ router = APIRouter(prefix="/interno")
 
 COOKIE = "tg_session"
 
+
+def _icon(name: str) -> Markup:
+    """Ícone do sprite static/icons.svg, para usar nos templates: {{ ic('trash') }}"""
+    kit = " k" if name.startswith("k-") else ""
+    return Markup(f'<svg class="ic{kit}" aria-hidden="true"><use href="/static/icons.svg#{name}"/></svg>')
+
+
+templates.env.globals["ic"] = _icon
+
 NAV = [
-    # (perm, href, label, ícone)
-    ("resultados", "/interno/linha", "Linha de tiro", "🎯"),
-    ("resultados", "/interno/lancamentos", "Lançamentos", "🔍"),
-    ("inscrever", "/interno/inscricoes", "Inscrições", "📝"),
-    ("atiradores", "/interno/atiradores", "Atiradores", "👤"),
-    (None, "/interno/classificacao", "Classificação", "🏆"),
-    ("admin", "/interno/etapas", "Etapas", "📅"),
-    ("admin", "/interno/categorias", "Categorias", "🏷️"),
-    ("admin", "/interno/usuarios", "Usuários", "👥"),
+    # (perm, href, label, ícone em static/icons.svg, grupo na barra lateral)
+    ("resultados", "/interno/linha", "Linha de tiro", "k-target", "Operação"),
+    ("resultados", "/interno/lancamentos", "Lançamentos", "list", "Operação"),
+    ("inscrever", "/interno/inscricoes", "Inscrições", "k-dogtag", "Operação"),
+    ("atiradores", "/interno/atiradores", "Atiradores", "k-soldier", "Cadastro"),
+    (None, "/interno/classificacao", "Classificação", "k-medal", "Cadastro"),
+    ("admin", "/interno/indicadores", "Indicadores", "chart", "Administração"),
+    ("admin", "/interno/etapas", "Etapas", "calendar", "Administração"),
+    ("admin", "/interno/categorias", "Categorias", "k-rank", "Administração"),
+    ("admin", "/interno/usuarios", "Usuários", "users", "Administração"),
 ]
 
 
@@ -206,18 +217,30 @@ async def api_linha_dados(request: Request):
         conn.close()
 
 
-def _resolve_category(conn, stage, shooter_id: int, modality: str):
+def _resolve_category(conn, stage, shooter_id: int, modality: str, persist: bool = True):
     """Mesma regra do bot: categoria atual do atirador (ou a inicial da
-    modalidade), congelada no mês."""
+    modalidade), congelada no mês.
+    persist=False só consulta: não cadastra o atirador na modalidade nem cria
+    o snapshot do mês (usado ao abrir o atirador na linha, antes de existir
+    passada naquela arma)."""
     month = db.get_month(conn, stage["month_id"])
     current = db.get_shooter_category(conn, shooter_id, modality)
     if not current:
         current = db.default_category_id(conn, modality)
-        if current:
+        if current and persist:
             db.set_shooter_category(conn, shooter_id, modality, current)
     if not current:
         return None
-    cat_id = db.month_category_id(conn, month["id"], shooter_id, modality, current)
+    if persist:
+        cat_id = db.month_category_id(conn, month["id"], shooter_id, modality, current)
+    elif month["status"] == "aberto":
+        cat_id = current  # mês aberto: a categoria atual é a que vale
+    else:
+        row = conn.execute(
+            "SELECT category_id FROM month_category "
+            "WHERE month_id=? AND shooter_id=? AND modality=?",
+            (month["id"], shooter_id, modality)).fetchone()
+        cat_id = row["category_id"] if row else current
     return db.get_category(conn, cat_id)
 
 
@@ -232,12 +255,18 @@ async def api_linha_atirador(request: Request, shooter_id: int):
             raise HTTPException(404)
         cats = {}
         for m in db.list_modalities(conn):
-            c = _resolve_category(conn, stage, shooter_id, m["code"])
+            c = _resolve_category(conn, stage, shooter_id, m["code"], persist=False)
             cats[m["code"]] = {"id": c["id"], "name": c["name"]} if c else None
-        conn.commit()
+        # passadas de toda a vida por arma: a tela do RO usa para sugerir a arma
+        # habitual e avisar quando é a primeira vez do atirador naquela arma
+        hist = conn.execute(
+            "SELECT e.modality, COUNT(ru.id) AS n FROM enrollments e "
+            "JOIN runs ru ON ru.enrollment_id=e.id WHERE e.shooter_id=? "
+            "GROUP BY e.modality", (shooter_id,)).fetchall()
         return {
             "shooter": {"id": sh["id"], "name": sh["name"]},
             "categories": cats,
+            "history": {h["modality"]: h["n"] for h in hist},
             "runs": webdb.shooter_stage_runs(conn, stage["id"], shooter_id),
             "stage_label": stage_label(conn, stage),
         }

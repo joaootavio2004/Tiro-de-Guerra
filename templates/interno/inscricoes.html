@@ -5,15 +5,11 @@
   .res{margin-top:10px; display:flex; flex-direction:column; gap:6px}
   .res .item{cursor:default}
   .newrow{border:1px dashed var(--gold); background:var(--gold-soft)}
-  .cpfbox{border:1px solid var(--gold); background:var(--surface2); border-radius:12px; padding:14px; margin-top:8px}
+  .cpfbox{border:1px solid var(--gold); background:var(--surface2); border-radius:var(--r-sm); padding:14px; margin-top:8px}
   .cpfbox .nm{font-family:"Oswald",sans-serif; font-weight:600; text-transform:uppercase; font-size:17px}
   .cpfbox .why{color:var(--muted); font-size:12.5px; margin:4px 0 10px}
   .cpfbox .row{display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap}
   .cpfbox .row > div{flex:1; min-width:160px}
-  .toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--gold); color:var(--ink);
-    border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none;
-    transition:opacity .25s; max-width:90vw; text-align:center}
-  .toast.show{opacity:1} .toast.err{background:#c0392b; color:#fff}
 </style>
 {% endblock %}
 {% block content %}
@@ -21,8 +17,8 @@
 <p class="lead">{% if open_stage %}{{ open_stage_label }} · {{ fmt_date(open_stage.date) }} — busque o atirador e marque presença. Todo atirador precisa de CPF cadastrado (é o que evita cadastro duplicado). A arma é escolhida pelo RO na hora da passada.{% else %}Não há etapa aberta.{% endif %}</p>
 
 <div class="sub-tabs">
-  <button class="on" data-t="tabPres" onclick="tab(this)">📝 Presença</button>
-  <button data-t="tabBill" onclick="tab(this)">💰 Passadas (cobrança)</button>
+  <button class="on" data-t="tabPres" onclick="tab(this)">{{ ic('clipboard') }} Presença</button>
+  <button data-t="tabBill" onclick="tab(this)">{{ ic('cash') }} Passadas (cobrança)</button>
 </div>
 
 <section id="tabPres">
@@ -100,7 +96,7 @@ async function search(v){
     if(CAN_CREATE && term.length>=3){
       h += '<div class="item newrow"><div class="who"><div class="nm">'+esc(term.toUpperCase())+'</div>'+
         '<div class="meta">'+(rows.length?'Não é nenhum dos acima?':'Nenhum cadastro com esse nome.')+' Cadastre com CPF.</div></div>'+
-        '<button class="btn btn-sm btn-gold" onclick="askNew()">➕ Cadastrar novo</button></div>';
+        '<button class="btn btn-sm btn-gold" onclick="askNew()">'+IC('plus')+' Cadastrar novo</button></div>';
     } else if(!rows.length){
       h += '<div class="muted small">Nenhum cadastro com esse nome.</div>';
     }
@@ -113,7 +109,7 @@ async function pick(id){
   try{
     var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id});
     if(d.need_cpf){ askCPF(id, d.name); return; }
-    PARTS=d.participants; renderList(); toast('Presença marcada ✔'); search($('q').value);
+    PARTS=d.participants; renderList(); toast('Presença marcada'); search($('q').value);
   }catch(e){ toast(e.message, true); }
 }
 function askCPF(id, name){
@@ -124,7 +120,7 @@ function askCPF(id, name){
     '<div class="cpfbox" id="cpf'+id+'"><div class="nm">'+esc(name)+'</div>'+
     '<div class="why">Este cadastro está sem CPF. Informe para marcar a presença — é assim que evitamos dois cadastros da mesma pessoa.</div>'+
     '<div class="row"><div><label>CPF</label><input type="text" id="cpfin'+id+'" inputmode="numeric" placeholder="000.000.000-00" autocomplete="off"></div>'+
-    '<div style="flex:0"><button class="btn btn-gold" onclick="saveCPF('+id+')">✔ Confirmar e marcar</button></div></div></div>');
+    '<div style="flex:0"><button class="btn btn-gold" onclick="saveCPF('+id+')">'+IC('check')+' Confirmar e marcar</button></div></div></div>');
   var el=$('cpfin'+id); bindCPF(el); el.focus();
   el.addEventListener('keydown', function(ev){ if(ev.key==='Enter') saveCPF(id); });
 }
@@ -134,7 +130,7 @@ async function saveCPF(id){
   try{
     var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id, cpf:v});
     if(d.need_cpf){ toast('CPF não foi aceito.', true); return; }
-    PARTS=d.participants; renderList(); toast('CPF salvo e presença marcada ✔'); search($('q').value);
+    PARTS=d.participants; renderList(); toast('CPF salvo e presença marcada'); search($('q').value);
   }catch(e){ toast(e.message, true); }
 }
 async function removeP(id){
@@ -152,7 +148,7 @@ function askNew(){
     '<div class="why">Confira o nome completo e informe o CPF (obrigatório).</div>'+
     '<div class="row"><div><label>Nome completo</label><input type="text" id="nName" style="text-transform:uppercase" autocomplete="off"></div>'+
     '<div><label>CPF</label><input type="text" id="nCpf" inputmode="numeric" placeholder="000.000.000-00" autocomplete="off"></div>'+
-    '<div style="flex:0"><button class="btn btn-gold" onclick="createShooter(false)">➕ Cadastrar e inscrever</button></div></div></div>');
+    '<div style="flex:0"><button class="btn btn-gold" onclick="createShooter(false)">'+IC('plus')+' Cadastrar e inscrever</button></div></div></div>');
   $('nName').value = name; bindCPF($('nCpf')); $('nCpf').focus();
   $('nCpf').addEventListener('keydown', function(ev){ if(ev.key==='Enter') createShooter(false); });
 }
@@ -170,7 +166,7 @@ async function createShooter(force){
     $('q').value=''; $('res').innerHTML='';
     var p = await api('/interno/api/linha/dados').catch(function(){return null;});
     if(p && p.participants) PARTS=p.participants; else PARTS.push({id:d.id,name:d.name,runs:0,by_modality:{}});
-    renderList(); toast(d.name+' cadastrado e presente ✔');
+    renderList(); toast(d.name+' cadastrado e presente');
   }catch(e){ toast(e.message, true); }
 }
 

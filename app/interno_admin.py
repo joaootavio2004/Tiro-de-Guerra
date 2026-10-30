@@ -14,6 +14,27 @@ router = APIRouter(prefix="/interno")
 
 
 # ============================================================================
+# INDICADORES (participação por etapa e por mês)
+# ============================================================================
+@router.get("/indicadores", response_class=HTMLResponse)
+async def indicadores(request: Request):
+    conn = db.get_conn()
+    try:
+        user, perms = need(request, conn, "admin")
+        data = webdb.participation_stats(conn)
+        # lista (não dict): o tojson do Jinja ordena chaves e trocaria a ordem das cores
+        mods = [[m["code"], m["label"]] for m in db.list_modalities(conn)]
+        for s in data["stages"]:
+            s["label"] = f"{s['number']}ª {MONTH_PT[s['month']][:3]}/{str(s['year'])[2:]}"
+        for m in data["months"]:
+            m["label"] = f"{MONTH_PT[m['month']][:3]}/{str(m['year'])[2:]}"
+            m["full"] = f"{MONTH_PT[m['month']]} {m['year']}"
+        return render(request, conn, "indicadores.html", user, perms, data=data, mods=mods)
+    finally:
+        conn.close()
+
+
+# ============================================================================
 # ETAPAS / MÊS
 # ============================================================================
 @router.get("/etapas", response_class=HTMLResponse)

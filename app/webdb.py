@@ -289,3 +289,64 @@ def shooter_history(conn, shooter_id: int) -> List[Dict[str, Any]]:
         d["year"], d["month"] = r["year"], r["month"]
         out.append(d)
     return out
+
+
+def participation_stats(conn) -> Dict[str, Any]:
+    """Números de participação para a página de indicadores.
+    - por etapa: inscritos (check-in ou inscrição), atiradores que passaram,
+      passadas e DQs, e passadas por modalidade
+    - por mês: atiradores distintos, novos (primeira passada da vida no mês),
+      passadas e etapas realizadas"""
+    stages = conn.execute(
+        "SELECT st.id, st.number, st.date, m.id AS month_id, m.year, m.month "
+        "FROM stages st JOIN months m ON m.id=st.month_id "
+        "ORDER BY m.year, m.month, st.number").fetchall()
+    run_rows = conn.execute(
+        "SELECT e.stage_id, e.shooter_id, e.modality, ru.dq FROM runs ru "
+        "JOIN enrollments e ON e.id=ru.enrollment_id").fetchall()
+    enrolled = conn.execute(
+        "SELECT stage_id, shooter_id FROM enrollments UNION "
+        "SELECT stage_id, shooter_id FROM stage_checkins").fetchall()
+
+    by_stage = {s["id"]: {"enrolled": set(), "shooters": set(), "runs": 0, "dq": 0,
+                          "by_mod": {}} for s in stages}
+    for r in enrolled:
+        if r["stage_id"] in by_stage:
+            by_stage[r["stage_id"]]["enrolled"].add(r["shooter_id"])
+    for r in run_rows:
+        b = by_stage.get(r["stage_id"])
+        if b is None:
+            continue
+        b["shooters"].add(r["shooter_id"])
+        b["runs"] += 1
+        b["dq"] += 1 if r["dq"] else 0
+        b["by_mod"][r["modality"]] = b["by_mod"].get(r["modality"], 0) + 1
+
+    out_stages, months, seen = [], {}, set()
+    for s in stages:
+        b = by_stage[s["id"]]
+        if not b["runs"] and not b["enrolled"]:
+            continue
+        out_stages.append({
+            "id": s["id"], "number": s["number"], "date": s["date"],
+            "month_id": s["month_id"], "year": s["year"], "month": s["month"],
+            "enrolled": len(b["enrolled"]), "shooters": len(b["shooters"]),
+            "runs": b["runs"], "dq": b["dq"], "by_mod": b["by_mod"],
+        })
+        m = months.setdefault(s["month_id"], {
+            "id": s["month_id"], "year": s["year"], "month": s["month"],
+            "stages": 0, "shooters": set(), "new": 0, "runs": 0, "by_mod": {}})
+        if b["runs"]:
+            m["stages"] += 1
+        new = b["shooters"] - seen - m["shooters"]
+        m["new"] += len(new)
+        seen |= b["shooters"]
+        m["shooters"] |= b["shooters"]
+        m["runs"] += b["runs"]
+        for k, v in b["by_mod"].items():
+            m["by_mod"][k] = m["by_mod"].get(k, 0) + v
+    out_months = []
+    for m in months.values():
+        m["shooters"] = len(m["shooters"])
+        out_months.append(m)
+    return {"stages": out_stages, "months": out_months}

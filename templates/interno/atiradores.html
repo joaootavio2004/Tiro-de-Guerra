@@ -13,13 +13,13 @@
     <div class="frow">
       <div><label>Nome completo</label><input type="text" name="name" style="text-transform:uppercase" required></div>
       <div><label>CPF (opcional)</label><input type="text" name="cpf" inputmode="numeric"></div>
-      <div><button class="btn btn-gold btn-block">➕ Cadastrar</button></div>
+      <div><button class="btn btn-gold btn-block">{{ ic('plus') }} Cadastrar</button></div>
     </div>
   </form>
 </div>
 {% if dups %}
-<div class="box" style="border-color:#7a6a2a">
-  <h2>⚠️ Possíveis duplicados</h2>
+<div class="box warn">
+  <h2>Possíveis duplicados</h2>
   {% for g in dups %}
   <div class="small" style="margin-bottom:6px">{% for s in g %}<a href="/interno/atiradores/{{ s.id }}">{{ s.name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
   {% endfor %}
@@ -31,7 +31,7 @@
   <div class="list">
     {% for s in rows %}
     <a class="item" href="/interno/atiradores/{{ s.id }}" style="text-decoration:none">
-      <div class="who"><div class="nm">{{ s.name }}</div><div class="meta">{{ fmt_cpf(s.cpf) if s.cpf else 'sem CPF' }}</div></div><span class="muted">›</span>
+      <div class="who"><div class="nm">{{ s.name }}</div><div class="meta">{{ fmt_cpf(s.cpf) if s.cpf else 'sem CPF' }}</div></div><span class="go">{{ ic('chev-r') }}</span>
     </a>
     {% endfor %}
   </div>

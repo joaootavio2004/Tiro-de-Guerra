@@ -1,7 +1,7 @@
 {% extends "interno/_base.html" %}
 {% block title %}{{ sh.name }}{% endblock %}
 {% block content %}
-<a class="btn btn-ghost btn-sm" href="/interno/atiradores">‹ Atiradores</a>
+<a class="btn btn-ghost btn-sm" href="/interno/atiradores">{{ ic('chev-l') }} Atiradores</a>
 <h1 class="pg" style="margin-top:12px">{{ sh.name }}</h1>
 <p class="lead">{{ n_enroll }} inscrição(ões) no histórico.</p>
 <div class="grid2">
@@ -9,7 +9,7 @@
     <h2>Dados</h2>
     <div class="f"><label>Nome completo</label><input type="text" name="name" value="{{ sh.name }}" style="text-transform:uppercase" required></div>
     <div class="f"><label>CPF</label><input type="text" name="cpf" value="{{ fmt_cpf(sh.cpf) if sh.cpf else '' }}" inputmode="numeric"></div>
-    <button class="btn btn-gold">💾 Salvar</button>
+    <button class="btn btn-gold">{{ ic('save') }} Salvar</button>
   </form>
   <div class="box">
     <h2>Categorias</h2>
@@ -46,12 +46,12 @@
     <div class="f"><label>Buscar cadastro de destino (o que fica)</label><input type="search" id="mq" placeholder="Parte do nome" autocomplete="off"></div>
     <div id="mres" class="list" style="margin-bottom:10px"></div>
     <input type="hidden" name="dst_id" id="dst">
-    <button class="btn" id="mbtn" disabled>🔗 Mesclar neste destino</button>
+    <button class="btn" id="mbtn" disabled>{{ ic('link') }} Mesclar neste destino</button>
   </form>
   <form class="box" method="post" action="/interno/atiradores/{{ sh.id }}/excluir" onsubmit="return confirm('EXCLUIR {{ sh.name }} e TODO o histórico dele? Não pode ser desfeito.')">
     <h2>Excluir</h2>
     <div class="muted small" style="margin-bottom:10px">Apaga o atirador, inscrições e resultados. Prefira mesclar se for duplicado.</div>
-    <button class="btn btn-danger">🗑️ Excluir atirador</button>
+    <button class="btn btn-danger">{{ ic('trash') }} Excluir atirador</button>
   </form>
 </div>
 {% endblock %}

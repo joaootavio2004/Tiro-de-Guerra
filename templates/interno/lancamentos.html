@@ -1,6 +1,5 @@
 {% extends "interno/_base.html" %}
 {% block title %}Lançamentos{% endblock %}
-{% block head %}<style>.toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--gold); color:var(--ink); border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s} .toast.show{opacity:1} .toast.err{background:#c0392b; color:#fff}</style>{% endblock %}
 {% block content %}
 <h1 class="pg">Lançamentos</h1>
 <p class="lead">{% if open_stage %}{{ open_stage_label }} — passadas lançadas nesta etapa. Apague a errada e lance de novo pela linha de tiro.{% else %}Não há etapa aberta.{% endif %}</p>
@@ -14,7 +13,7 @@
       <div class="nm">{{ 'DQ' if r.dq else '%.2fs'|format(r.final) }} <span class="muted" style="font-size:12px; font-weight:400">{{ modality_label(r.modality) }} · {{ r.category }}</span></div>
       <div class="meta">{{ r.created_at[11:16] }} · {% if r.dq %}desqualificado{% else %}pista {{ '%.2f'|format(r.raw) }}s{% if r.pen_secs %} + {{ r.pen_secs }}s pen.{% endif %}{% endif %}{% if r.n_shots %} · {{ r.n_shots }} disparos{% endif %}{% if r.source == 'timer' %} · timer{% endif %}</div>
     </div>
-    <button class="btn btn-sm" onclick='printRun({{ r|tojson }}, {{ row.shooter.name|tojson }}, this)'>🖨️</button>
+    <button class="btn btn-sm" onclick='printRun({{ r|tojson }}, {{ row.shooter.name|tojson }}, this)'>{{ ic('print') }}</button>
     <form method="post" action="/interno/lancamentos/apagar" onsubmit="return confirm('Apagar esta passada?')"><input type="hidden" name="run_id" value="{{ r.id }}"><button class="btn btn-sm btn-danger">Apagar</button></form>
   </div>
   {% endfor %}

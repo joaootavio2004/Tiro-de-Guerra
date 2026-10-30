@@ -1,0 +1,164 @@
+{% extends "interno/_base.html" %}
+{% block title %}Indicadores{% endblock %}
+{% block head %}
+<style>
+  .chart-box{position:relative}
+  .chart-box .legend{display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--muted); margin:-4px 0 10px}
+  .chart-box .legend span{display:inline-flex; align-items:center; gap:7px}
+  .chart-box .legend i{width:10px; height:10px; border-radius:2px; display:inline-block}
+  .chart{width:100%; min-height:240px}
+  .chart svg{display:block; width:100%; overflow:visible}
+  .chart .grid{stroke:var(--line-soft); stroke-width:1}
+  .chart .axis{fill:var(--muted); font:11px "Inter",sans-serif}
+  .chart .val{fill:var(--text); font:500 11px "Oswald",sans-serif; letter-spacing:.02em}
+  .chart .hit{fill:transparent; cursor:default}
+  .chart .hit:hover{fill:rgba(202,190,114,.05)}
+  .tip{position:absolute; z-index:5; pointer-events:none; min-width:170px; background:var(--side); border:1px solid var(--line);
+    border-radius:var(--r-sm); padding:10px 12px; font-size:12.5px; box-shadow:0 10px 28px rgba(0,0,0,.45); display:none}
+  .tip b{display:block; font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.06em; text-transform:uppercase; font-size:12px; margin-bottom:6px}
+  .tip div{display:flex; justify-content:space-between; gap:14px; color:var(--muted)}
+  .tip div span:last-child{color:var(--text); font-variant-numeric:tabular-nums}
+  .tip i{width:8px; height:8px; border-radius:2px; display:inline-block; margin-right:6px}
+  .kpi .d{font-size:12px; margin-top:6px; color:var(--muted)}
+  .kpi .d.up{color:var(--ok)} .kpi .d.down{color:var(--danger)}
+  table.plain td.r, table.plain th.r{text-align:right}
+</style>
+{% endblock %}
+{% block content %}
+{% set months = data.months %}
+{% set last = months[-1] if months else None %}
+{% set prev = months[-2] if months|length > 1 else None %}
+<h1 class="pg">Indicadores</h1>
+<p class="lead">Participação do clube por etapa e por mês. "Atiradores" conta cada pessoa uma vez; "passadas" conta cada tempo lançado, inclusive DQ.</p>
+
+{% if not data.stages %}
+<div class="box muted">Ainda não há etapas com passadas lançadas.</div>
+{% else %}
+{% macro delta(cur, old) -%}
+  {%- if old is not none and old -%}
+    {%- set p = ((cur - old) / old * 100)|round|int -%}
+    <div class="d {{ 'up' if p > 0 else ('down' if p < 0 else '') }}">{{ '+' if p > 0 }}{{ p }}% sobre o mês anterior</div>
+  {%- else -%}<div class="d">&nbsp;</div>{%- endif -%}
+{%- endmacro %}
+<div class="sec-title">{{ last.full }}</div>
+<div class="cards">
+  <div class="kpi"><div class="v">{{ last.shooters }}</div><div class="l">Atiradores no mês</div>{{ delta(last.shooters, prev.shooters if prev else none) }}</div>
+  <div class="kpi"><div class="v">{{ last.runs }}</div><div class="l">Passadas no mês</div>{{ delta(last.runs, prev.runs if prev else none) }}</div>
+  <div class="kpi"><div class="v">{{ '%.1f'|format(last.runs / last.shooters) if last.shooters else '—' }}</div><div class="l">Passadas por atirador</div><div class="d">{{ last.stages }} etapa{{ 's' if last.stages != 1 }} realizada{{ 's' if last.stages != 1 }}</div></div>
+  <div class="kpi"><div class="v">{{ last.new if months|length > 1 else '—' }}</div><div class="l">Atiradores novos</div><div class="d">primeira passada no clube</div></div>
+</div>
+
+<div class="grid2" style="margin-top:18px">
+  <div class="box chart-box"><h2>Atiradores por etapa</h2><div class="chart" id="cStageShooters"></div></div>
+  <div class="box chart-box"><h2>Passadas por etapa</h2><div class="legend" id="lStageRuns"></div><div class="chart" id="cStageRuns"></div></div>
+</div>
+<div class="grid2">
+  <div class="box chart-box"><h2>Atiradores por mês</h2><div class="legend" id="lMonthShooters"></div><div class="chart" id="cMonthShooters"></div></div>
+  <div class="box chart-box"><h2>Passadas por mês</h2><div class="legend" id="lMonthRuns"></div><div class="chart" id="cMonthRuns"></div></div>
+</div>
+
+<div class="box">
+  <h2>Resumo mensal</h2>
+  <div class="tbl-scroll"><table class="plain">
+    <thead><tr><th>Mês</th><th class="r">Etapas</th><th class="r">Atiradores</th><th class="r">Novos</th><th class="r">Passadas</th>{% for code, label in mods %}<th class="r">{{ label }}</th>{% endfor %}<th class="r">Média/etapa</th></tr></thead>
+    <tbody>
+    {% for m in months|reverse %}
+      <tr><td>{{ m.full }}</td><td class="r num">{{ m.stages }}</td><td class="r num">{{ m.shooters }}</td>
+        <td class="r num">{{ m.new if not loop.last else '—' }}</td><td class="r num"><b>{{ m.runs }}</b></td>
+        {% for code, _ in mods %}<td class="r num">{{ m.by_mod.get(code, 0) }}</td>{% endfor %}
+        <td class="r num">{{ '%.1f'|format(m.runs / m.stages) if m.stages else '—' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+<p class="muted small">No primeiro mês do histórico todos os atiradores contam como novos, por isso a coluna fica em branco.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if data.stages %}
+<script>
+"use strict";
+var STAGES = {{ data.stages|tojson }}, MONTHS = {{ data.months|tojson }}, MODS = {{ mods|tojson }};
+// paleta categórica validada (daltonismo e contraste) sobre o fundo dos blocos; ordem fixa
+var PAL = ['#a8902a', '#3a92cc', '#cf6a3c'];
+var MOD_CODES = MODS.map(function(m){ return m[0]; }), MOD_LABEL = {};
+MODS.forEach(function(m){ MOD_LABEL[m[0]] = m[1]; });
+function modColor(code){ var i = MOD_CODES.indexOf(code); return PAL[i >= 0 && i < PAL.length ? i : PAL.length - 1]; }
+
+function legend(id, series){
+  document.getElementById(id).innerHTML = series.map(function(s){
+    return '<span><i style="background:'+s.color+'"></i>'+s.name+'</span>'; }).join('');
+}
+
+function niceMax(v){ if(v <= 5) return 5; var p = Math.pow(10, Math.floor(Math.log10(v))); var n = v / p;
+  return (n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+
+/* Barras (empilhadas quando há mais de uma série). extra(i) devolve linhas a mais para a dica. */
+function bars(id, labels, series, extra){
+  var el = document.getElementById(id), box = el.parentNode;
+  var tip = box.querySelector('.tip') || box.appendChild(Object.assign(document.createElement('div'), {className:'tip'}));
+  function draw(){
+    var W = el.clientWidth, H = 240, L = 34, B = 26, T = 18, R = 4;
+    var n = labels.length, tot = labels.map(function(_, i){ return series.reduce(function(a, s){ return a + (s.values[i] || 0); }, 0); });
+    var max = niceMax(Math.max.apply(null, tot.concat([1]))), ph = H - B - T, band = (W - L - R) / n;
+    var bw = Math.max(4, Math.min(34, band * .62)), y = function(v){ return T + ph - v / max * ph; };
+    var step = Math.ceil(n / Math.max(1, Math.floor((W - L) / 54)));
+    var s = '<svg viewBox="0 0 '+W+' '+H+'" height="'+H+'" role="img">';
+    for(var g = 0; g <= 5; g++){ var gv = max / 5 * g, gy = y(gv);
+      s += '<line class="grid" x1="'+L+'" x2="'+(W-R)+'" y1="'+gy+'" y2="'+gy+'"/>';
+      s += '<text class="axis" x="'+(L-8)+'" y="'+(gy+4)+'" text-anchor="end">'+Math.round(gv)+'</text>'; }
+    labels.forEach(function(lb, i){
+      var cx = L + band * i + band / 2, x = cx - bw / 2, base = T + ph, segs = [];
+      series.forEach(function(sr){ var v = sr.values[i] || 0; if(v > 0) segs.push({v:v, c:sr.color}); });
+      segs.forEach(function(sg, k){
+        var h = sg.v / max * ph, top = base - h, gap = k > 0 ? 2 : 0, r = k === segs.length - 1 ? Math.min(4, h, bw/2) : 0;
+        var y0 = top, y1 = base - gap;
+        if(y1 - y0 < 1) { base = top; return; }
+        s += '<path fill="'+sg.c+'" d="M'+x+','+y1+' V'+(y0+r)+' Q'+x+','+y0+' '+(x+r)+','+y0+' H'+(x+bw-r)+' Q'+(x+bw)+','+y0+' '+(x+bw)+','+(y0+r)+' V'+y1+' Z"/>';
+        base = top;
+      });
+      if(n <= 18 && tot[i]) s += '<text class="val" x="'+cx+'" y="'+(y(tot[i])-6)+'" text-anchor="middle">'+tot[i]+'</text>';
+      if(i % step === 0) s += '<text class="axis" x="'+cx+'" y="'+(H-8)+'" text-anchor="middle">'+lb+'</text>';
+      s += '<rect class="hit" data-i="'+i+'" x="'+(L+band*i)+'" y="'+T+'" width="'+band+'" height="'+ph+'"/>';
+    });
+    el.innerHTML = s + '</svg>';
+    el.querySelectorAll('.hit').forEach(function(h){
+      h.addEventListener('mousemove', function(ev){
+        var i = +h.dataset.i, rows = series.map(function(sr){
+          return '<div><span><i style="background:'+sr.color+'"></i>'+sr.name+'</span><span>'+(sr.values[i]||0)+'</span></div>'; });
+        if(series.length > 1) rows.push('<div><span>Total</span><span>'+tot[i]+'</span></div>');
+        if(extra) rows = rows.concat(extra(i).map(function(e){ return '<div><span>'+e[0]+'</span><span>'+e[1]+'</span></div>'; }));
+        tip.innerHTML = '<b>'+labels[i]+'</b>' + rows.join('');
+        tip.style.display = 'block';
+        var bx = box.getBoundingClientRect(), tx = ev.clientX - bx.left + 14;
+        if(tx + tip.offsetWidth > bx.width) tx = ev.clientX - bx.left - tip.offsetWidth - 14;
+        tip.style.left = tx + 'px'; tip.style.top = (ev.clientY - bx.top - 10) + 'px';
+      });
+      h.addEventListener('mouseleave', function(){ tip.style.display = 'none'; });
+    });
+  }
+  draw();
+  var t; window.addEventListener('resize', function(){ clearTimeout(t); t = setTimeout(draw, 120); });
+}
+
+var sl = STAGES.map(function(s){ return s.label; }), ml = MONTHS.map(function(m){ return m.label; });
+bars('cStageShooters', sl, [{name:'Atiradores', color:PAL[0], values:STAGES.map(function(s){ return s.shooters; })}],
+  function(i){ var s = STAGES[i]; return [['Inscritos', s.enrolled], ['Passadas', s.runs], ['DQ', s.dq]]; });
+
+var stageMods = MOD_CODES.map(function(c){ return {name:MOD_LABEL[c], color:modColor(c), values:STAGES.map(function(s){ return s.by_mod[c] || 0; })}; });
+legend('lStageRuns', stageMods);
+bars('cStageRuns', sl, stageMods, function(i){ return [['DQ', STAGES[i].dq]]; });
+
+var mShooters = [
+  {name:'Recorrentes', color:PAL[0], values:MONTHS.map(function(m, i){ return i === 0 ? m.shooters : m.shooters - m.new; })},
+  {name:'Novos', color:PAL[1], values:MONTHS.map(function(m, i){ return i === 0 ? 0 : m.new; })}];
+legend('lMonthShooters', mShooters);
+bars('cMonthShooters', ml, mShooters, function(i){ return [['Etapas', MONTHS[i].stages]]; });
+
+var monthMods = MOD_CODES.map(function(c){ return {name:MOD_LABEL[c], color:modColor(c), values:MONTHS.map(function(m){ return m.by_mod[c] || 0; })}; });
+legend('lMonthRuns', monthMods);
+bars('cMonthRuns', ml, monthMods, function(i){ var m = MONTHS[i]; return [['Média por etapa', m.stages ? (m.runs/m.stages).toFixed(1) : '—']]; });
+</script>
+{% endif %}
+{% endblock %}

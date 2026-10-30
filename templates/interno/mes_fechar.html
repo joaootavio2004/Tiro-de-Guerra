@@ -1,24 +1,24 @@
 {% extends "interno/_base.html" %}
 {% block title %}Fechar mês{% endblock %}
 {% block content %}
-<a class="btn btn-ghost btn-sm" href="/interno/etapas">‹ Etapas</a>
+<a class="btn btn-ghost btn-sm" href="/interno/etapas">{{ ic('chev-l') }} Etapas</a>
 <h1 class="pg" style="margin-top:12px">Fechar {{ month_pt[month.month] }} {{ month.year }}</h1>
 <p class="lead">Proposta de subidas e descidas calculada pela configuração das categorias (quantos sobem/descem). Ao confirmar, as categorias mudam e o mês seguinte é aberto. Meses fechados não mudam mais.</p>
-{% if open_stage_exists %}<div class="box" style="border-color:#7a6a2a">⚠️ Há uma etapa aberta. Feche-a antes de fechar o mês.</div>{% endif %}
+{% if open_stage_exists %}<div class="note" style="margin-bottom:18px">{{ ic('alert') }} Há uma etapa aberta. Feche-a antes de fechar o mês.</div>{% endif %}
 <div class="box">
   <h2>Movimentações</h2>
   {% if moves %}
   <table class="plain"><thead><tr><th>Atirador</th><th>Arma</th><th>De</th><th></th><th>Para</th></tr></thead><tbody>
-  {% for m in moves %}<tr><td>{{ m.name }}</td><td>{{ m.modality_label }}</td><td>{{ m['from'] }}</td><td>{{ '⬆️' if m.direction=='sobe' else '⬇️' }}</td><td><b>{{ m.to }}</b></td></tr>{% endfor %}
+  {% for m in moves %}<tr><td>{{ m.name }}</td><td>{{ m.modality_label }}</td><td>{{ m['from'] }}</td><td>{% if m.direction=='sobe' %}<span class="tag ok">{{ ic('up') }} sobe</span>{% else %}<span class="tag red">{{ ic('down') }} desce</span>{% endif %}</td><td><b>{{ m.to }}</b></td></tr>{% endfor %}
   </tbody></table>
   {% else %}<div class="muted">Sem mudanças (pouca participação ou empate).</div>{% endif %}
-  {% if warnings %}<div class="sep"></div><div style="color:#f0c060" class="small">{% for w in warnings %}⚠️ {{ w }}<br>{% endfor %}</div>{% endif %}
+  {% if warnings %}<div class="sep"></div><div class="list">{% for w in warnings %}<div class="note">{{ ic('alert') }} {{ w }}</div>{% endfor %}</div>{% endif %}
 </div>
 <div class="grid2">
-  <div class="box"><h2>Antes de fechar</h2><a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=mensal">📄 PDF mensal com as movimentações</a> <a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=geral">🏆 PDF geral</a></div>
+  <div class="box"><h2>Antes de fechar</h2><a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=mensal">{{ ic('file') }} PDF mensal com as movimentações</a> <a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=geral">{{ ic('trophy') }} PDF geral</a></div>
   <form class="box" method="post" action="/interno/mes/fechar" onsubmit="return confirm('Confirmar o fechamento do mês? As categorias serão atualizadas.')">
     <h2>Confirmar</h2>
-    <button class="btn btn-gold btn-lg" {% if open_stage_exists %}disabled{% endif %}>✅ Fechar o mês</button>
+    <button class="btn btn-gold btn-lg" {% if open_stage_exists %}disabled{% endif %}>{{ ic('check') }} Fechar o mês</button>
   </form>
 </div>
 {% endblock %}

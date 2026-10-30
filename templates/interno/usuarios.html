@@ -8,16 +8,16 @@
     <h2>Novo usuário</h2>
     <div class="f"><label>Usuário (login)</label><input type="text" name="username" autocapitalize="none" required placeholder="ex.: joao.ro"></div>
     <div class="f"><label>Nome</label><input type="text" name="name" placeholder="Como aparece na tela"></div>
-    <div class="f"><label>Senha (mín. 6)</label><input type="text" name="password" required></div>
+    <div class="f"><label>Senha (mín. 6)</label><input type="password" name="password" required minlength="6" autocomplete="new-password"></div>
     <div class="f"><label>Cargo</label><select name="role">{% for r in roles %}<option value="{{ r.r.code }}" {% if r.r.code=='ro' %}selected{% endif %}>{{ r.r.label }}</option>{% endfor %}</select></div>
-    <button class="btn btn-gold">➕ Criar usuário</button>
+    <button class="btn btn-gold">{{ ic('plus') }} Criar usuário</button>
   </form>
   <div class="box">
     <h2>Cargos e permissões</h2>
     {% for r in roles %}
     <div style="margin-bottom:12px">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap"><b>{{ r.r.label }}</b><span class="muted small">{{ r.members }} membro(s)</span>
-        {% if not r.r.builtin %}<form class="inline" method="post" action="/interno/cargos/{{ r.r.code }}/excluir" onsubmit="return confirm('Excluir cargo?')"><button class="btn btn-sm btn-danger">🗑️</button></form>{% endif %}</div>
+        {% if not r.r.builtin %}<form class="inline" method="post" action="/interno/cargos/{{ r.r.code }}/excluir" onsubmit="return confirm('Excluir cargo?')"><button class="btn btn-sm btn-danger" title="Excluir cargo" aria-label="Excluir cargo">{{ ic('trash') }}</button></form>{% endif %}</div>
       <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px">
         {% for code, label in permissions %}
         <form class="inline" method="post" action="/interno/cargos/{{ r.r.code }}/perm"><input type="hidden" name="perm" value="{{ code }}">
@@ -27,7 +27,7 @@
     </div>
     {% endfor %}
     <form method="post" action="/interno/cargos/novo" class="frow" style="border-top:1px dashed var(--line); padding-top:12px">
-      <div><label>Novo cargo</label><input type="text" name="label" placeholder="Nome do cargo" required></div><div><button class="btn btn-block">➕ Criar</button></div>
+      <div><label>Novo cargo</label><input type="text" name="label" placeholder="Nome do cargo" required></div><div><button class="btn btn-block">{{ ic('plus') }} Criar</button></div>
     </form>
   </div>
 </div>
@@ -38,9 +38,9 @@
     <div style="min-width:120px"><label>Login</label><div class="nm" style="font-size:15px">{{ u.username }}</div></div>
     <div style="flex:1; min-width:140px"><label>Nome</label><input type="text" name="name" value="{{ u.name }}"></div>
     <div style="min-width:150px"><label>Cargo</label><select name="role">{% for r in roles %}<option value="{{ r.r.code }}" {% if r.r.code==u.role %}selected{% endif %}>{{ r.r.label }}</option>{% endfor %}</select></div>
-    <div style="min-width:140px"><label>Nova senha</label><input type="text" name="password" placeholder="(manter)"></div>
+    <div style="min-width:140px"><label>Nova senha</label><input type="password" name="password" placeholder="(manter)" autocomplete="new-password"></div>
     <div style="min-width:110px"><label>Situação</label><select name="active"><option value="1" {% if u.active %}selected{% endif %}>ativo</option><option value="0" {% if not u.active %}selected{% endif %}>desativado</option></select></div>
-    <div style="align-self:flex-end"><button class="btn btn-sm btn-gold">💾 Salvar</button></div>
+    <div style="align-self:flex-end"><button class="btn btn-sm btn-gold">{{ ic('save') }} Salvar</button></div>
   </form>
   {% endfor %}
 </div>

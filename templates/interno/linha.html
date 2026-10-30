@@ -3,8 +3,8 @@
 {% block head %}
 <style>
   .devices{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px}
-  .dev{display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--line);
-    border-radius:999px; padding:6px 8px 6px 14px; font-size:12.5px; color:var(--muted)}
+  .dev{display:flex; background:var(--panel); align-items:center; gap:8px; border:1px solid var(--line);
+    border-radius:var(--r-sm); padding:6px 8px 6px 14px; font-size:12.5px; color:var(--muted)}
   .dev b{color:var(--text); font-weight:600}
   .screen{display:none} .screen.on{display:block}
   .groups h3{font-family:"Oswald",sans-serif; font-weight:500; letter-spacing:.14em; text-transform:uppercase;
@@ -12,15 +12,45 @@
   .item.pick{cursor:pointer}
   .item.pick:hover{border-color:var(--gold)}
   .big-name{font-family:"Oswald",sans-serif; font-weight:700; text-transform:uppercase; font-size:30px; line-height:1.05; margin:0}
-  .chips{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0}
-  .chip{font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.06em; text-transform:uppercase; font-size:14px;
-    border:1px solid var(--line); border-radius:12px; padding:12px 16px; background:var(--surface2); color:var(--text); cursor:pointer;
-    flex:1; text-align:center; min-width:120px}
-  .chip small{display:block; font-family:"Inter",sans-serif; font-weight:400; text-transform:none; letter-spacing:0;
-    color:var(--muted); font-size:12px; margin-top:3px}
-  .chip.on{background:var(--gold); color:var(--ink); border-color:var(--gold)}
-  .chip.on small{color:rgba(10,19,15,.65)}
-  .confirm{background:var(--gold-soft); border:1px dashed var(--gold); border-radius:12px; padding:12px 14px; font-size:14px; margin:12px 0}
+  /* arma: cada modalidade tem ícone e cor fixos (--mc), para o RO reconhecer de longe */
+  .chips{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:4px 0 12px}
+  .chip{position:relative; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center;
+    font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-size:17px;
+    border:2px solid var(--line); border-radius:var(--r); padding:14px 10px 12px; background:var(--surface); color:var(--text); cursor:pointer}
+  .chip .ic{width:54px; height:44px; color:var(--mc)}
+  .chip small{display:block; font-family:"Inter",sans-serif; font-weight:500; text-transform:none; letter-spacing:0;
+    color:var(--muted); font-size:12.5px}
+  .chip.on{border-color:var(--mc); background:color-mix(in srgb, var(--mc) 16%, var(--panel))}
+  .chip.on::after{content:"SELECIONADA"; position:absolute; top:-10px; left:50%; transform:translateX(-50%);
+    background:var(--mc); color:#0b1411; font-size:9.5px; letter-spacing:.16em; padding:2px 8px; border-radius:3px}
+  .chip:disabled{opacity:.35; cursor:not-allowed}
+  .chip .first{font-family:"Inter",sans-serif; font-size:11px; font-weight:600; letter-spacing:0; text-transform:none; color:var(--warn)}
+  .wband{display:flex; align-items:center; gap:14px; border-radius:var(--r); padding:12px 14px; margin:10px 0 4px;
+    background:color-mix(in srgb, var(--mc) 18%, var(--panel)); border:2px solid var(--mc)}
+  .wband .ic{width:52px; height:40px; color:var(--mc)}
+  .wband .w{flex:1; min-width:0}
+  .wband .w b{display:block; font-family:"Oswald",sans-serif; font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:22px; line-height:1}
+  .wband .w span{font-size:13px; color:var(--text); opacity:.85}
+  .wband.none{--mc:#55685d; border-style:dashed}
+  /* ficha de confirmação */
+  .sheet{position:fixed; inset:0; z-index:70; background:rgba(4,8,6,.78); display:flex; align-items:center; justify-content:center; padding:16px}
+  .sheet-card{width:100%; max-width:440px; max-height:100%; overflow:auto; background:var(--panel); border:1px solid var(--line);
+    border-radius:var(--r); padding:20px}
+  .sheet-card .hd{font-family:"Oswald",sans-serif; text-transform:uppercase; letter-spacing:.22em; font-size:11.5px; color:var(--muted); text-align:center}
+  .sheet-card .who{font-family:"Oswald",sans-serif; font-weight:700; text-transform:uppercase; font-size:26px; line-height:1.05; text-align:center; margin:8px 0 6px}
+  .sheet-card .wbig{display:flex; flex-direction:column; align-items:center; gap:6px; border:3px solid var(--mc); border-radius:var(--r);
+    background:color-mix(in srgb, var(--mc) 18%, var(--panel)); padding:16px 12px; margin:12px 0}
+  .sheet-card .wbig .ic{width:96px; height:76px; color:var(--mc)}
+  .sheet-card .wbig b{font-family:"Oswald",sans-serif; font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:30px; line-height:1}
+  .sheet-card .wbig span{font-size:15px}
+  .sheet-card .sum{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 12px}
+  .sheet-card .sum div{background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 10px; text-align:center}
+  .sheet-card .sum small{display:block; font-family:"Oswald",sans-serif; letter-spacing:.14em; text-transform:uppercase; font-size:10px; color:var(--muted)}
+  .sheet-card .sum b{font-family:"Oswald",sans-serif; font-size:22px}
+  .sheet-card .alt{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+  .sheet-card .alt .btn{flex:1; justify-content:center}
+  .alt .btn .ic.k{color:var(--mc); width:26px; height:20px}
+  .confirm{background:var(--gold-soft); border:1px dashed var(--gold); border-radius:var(--r-sm); padding:12px 14px; font-size:14px; margin:12px 0}
   .actions{display:grid; gap:10px; margin-top:14px}
   .clock{font-family:"Oswald",sans-serif; font-weight:700; font-size:64px; line-height:1; letter-spacing:.01em;
     color:var(--gold-bright); font-variant-numeric:tabular-nums; text-align:center; margin:8px 0}
@@ -30,30 +60,26 @@
   .state{text-align:center; font-family:"Oswald",sans-serif; letter-spacing:.2em; text-transform:uppercase; font-size:12px; color:var(--muted)}
   .state.live{color:#9fd48a}
   .shots{display:flex; flex-wrap:wrap; gap:6px; margin:14px 0; justify-content:center}
-  .shot{font-family:"Oswald",sans-serif; font-size:15px; border:1px solid var(--line); border-radius:10px; padding:7px 10px;
+  .shot{font-family:"Oswald",sans-serif; font-size:15px; border:1px solid var(--line); border-radius:var(--r-sm); padding:7px 10px;
     background:var(--surface2); cursor:pointer; font-variant-numeric:tabular-nums}
   .shot small{display:block; font-size:10px; color:var(--muted); letter-spacing:.1em}
   .shot.sel{border-color:var(--gold); background:var(--gold-soft)}
   .shot.seg{border-left:3px solid var(--khaki)}
   .pens{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin:12px 0}
-  .pen{background:var(--surface2); border:1px solid var(--line); border-radius:12px; padding:8px 4px; text-align:center; min-width:0}
+  .pen{background:var(--surface2); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 4px; text-align:center; min-width:0}
   .pen .l{font-family:"Oswald",sans-serif; letter-spacing:.12em; text-transform:uppercase; font-size:11px; color:var(--muted)}
   .pen .v{font-family:"Oswald",sans-serif; font-weight:700; font-size:30px; line-height:1; margin:6px 0}
   .pen .b{display:flex; gap:6px; justify-content:center}
-  .pen .b button{width:38px; height:36px; border-radius:10px; border:1px solid var(--line); background:var(--ink); color:var(--text); font-size:20px; cursor:pointer}
-  .final{background:var(--surface2); border:1px solid var(--line); border-radius:14px; padding:14px; text-align:center; margin:12px 0}
+  .pen .b button{width:38px; height:36px; border-radius:var(--r-sm); border:1px solid var(--line); background:var(--ink); color:var(--text); font-size:20px; cursor:pointer}
+  .final{background:var(--surface2); border:1px solid var(--line); border-radius:var(--r-sm); padding:14px; text-align:center; margin:12px 0}
   .final .l{font-family:"Oswald",sans-serif; letter-spacing:.16em; text-transform:uppercase; font-size:11px; color:var(--muted)}
   .final .v{font-family:"Oswald",sans-serif; font-weight:700; font-size:44px; line-height:1; color:var(--gold-bright); margin-top:4px}
   .final.dq .v{color:#f0a0a0}
   .timein{font-family:"Oswald",sans-serif; font-size:30px; text-align:center; font-weight:700}
-  .runrow{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:12px;
+  .runrow{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r-sm);
     background:var(--surface2); margin-bottom:8px}
   .runrow .t{font-family:"Oswald",sans-serif; font-weight:700; font-size:22px; min-width:90px}
   .runrow .m{flex:1; font-size:12.5px; color:var(--muted)}
-  .toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--gold); color:var(--ink);
-    border-radius:999px; padding:10px 20px; font-size:14px; font-weight:600; z-index:40; opacity:0; pointer-events:none; transition:opacity .25s}
-  .toast.show{opacity:1}
-  .toast.err{background:#c0392b; color:#fff}
 </style>
 {% endblock %}
 
@@ -76,22 +102,22 @@
 
 <!-- B · atirador selecionado -->
 <section class="screen" id="scrShooter">
-  <button class="btn btn-ghost btn-sm" onclick="go('pick')">‹ Voltar à lista</button>
+  <button class="btn btn-ghost btn-sm" onclick="go('pick')">{{ ic('chev-l') }} Voltar à lista</button>
   <div class="box" style="margin-top:12px">
     <h2 style="margin-bottom:6px">Atirador</h2>
     <p class="big-name" id="shName">—</p>
     <div id="shRunsBox" class="hide" style="margin-top:12px">
-      <button class="btn btn-block" id="shRunsBtn" onclick="toggleRuns()">📋 Resultados lançados</button>
+      <button class="btn btn-block" id="shRunsBtn" onclick="toggleRuns()">{{ ic('list') }} Resultados lançados</button>
       <div id="shRuns" class="hide" style="margin-top:10px"></div>
     </div>
   </div>
   <div class="box">
-    <h2>Armamento</h2>
+    <h2>Arma desta passada</h2>
     <div class="chips" id="modChips"></div>
-    <div class="confirm" id="confirmTxt"></div>
+    <div id="confirmTxt"></div>
     <div class="actions">
-      <button class="btn btn-gold btn-lg btn-block" id="btnStart" onclick="startRun()">▶ Iniciar passada</button>
-      <button class="btn btn-block" onclick="manualRun()">✍️ Lançar tempo manualmente</button>
+      <button class="btn btn-gold btn-lg btn-block" id="btnStart" onclick="startRun()">{{ ic('play') }} Iniciar passada</button>
+      <button class="btn btn-block" onclick="manualRun()">{{ ic('edit') }} Lançar tempo manualmente</button>
     </div>
     <p class="muted small" style="margin:12px 0 0" id="startHint"></p>
   </div>
@@ -101,18 +127,18 @@
 <section class="screen" id="scrRun">
   <div class="box">
     <p class="big-name" style="font-size:22px" id="runName">—</p>
-    <div class="muted small" id="runMeta"></div>
+    <div id="runMeta"></div>
     <div class="state" id="runState">aguardando o timer</div>
     <div class="clock" id="clock">—</div>
     <div class="clocklbl" id="clockLbl">último disparo</div>
     <div class="shots" id="runShots"></div>
     <div class="actions">
-      <button class="btn btn-gold btn-lg btn-block" onclick="finishRun()">🏁 Encerrar passada</button>
+      <button class="btn btn-gold btn-lg btn-block" onclick="finishRun()">{{ ic('flag') }} Encerrar passada</button>
       <div class="grid2">
-        <button class="btn btn-block" id="btnSum" onclick="sumRun()">➕ Somar passada</button>
-        <button class="btn btn-block btn-danger" onclick="restartRun()">🔁 Reiniciar</button>
+        <button class="btn btn-block" id="btnSum" onclick="sumRun()">{{ ic('plus') }} Somar passada</button>
+        <button class="btn btn-block btn-danger" onclick="restartRun()">{{ ic('refresh') }} Reiniciar</button>
       </div>
-      <button class="btn btn-ghost btn-block" onclick="cancelRun()">✖ Cancelar (descartar)</button>
+      <button class="btn btn-ghost btn-block" onclick="cancelRun()">{{ ic('x') }} Cancelar (descartar)</button>
     </div>
   </div>
 </section>
@@ -121,6 +147,7 @@
 <section class="screen" id="scrFinish">
   <div class="box">
     <p class="big-name" style="font-size:22px" id="finName">—</p>
+    <div id="finWeapon"></div>
     <div class="muted small" id="finMeta"></div>
     <div id="finShotsWrap">
       <h3 class="small muted" style="margin:14px 0 4px; text-transform:uppercase; letter-spacing:.12em">Disparos — toque no que vale como tempo de pista</h3>
@@ -133,11 +160,11 @@
       <div class="pen"><div class="l">Pen. 5s</div><div class="v" id="p5">0</div><div class="b"><button onclick="pen(5,-1)">−</button><button onclick="pen(5,1)">+</button></div></div>
       <div class="pen"><div class="l">Pen. 10s</div><div class="v" id="p10">0</div><div class="b"><button onclick="pen(10,-1)">−</button><button onclick="pen(10,1)">+</button></div></div>
     </div>
-    <button class="btn btn-block" id="dqBtn" onclick="toggleDQ()">⬜ Desqualificar (DQ)</button>
+    <button class="btn btn-block" id="dqBtn" onclick="toggleDQ()">{{ ic('square') }} Desqualificar (DQ)</button>
     <div class="final" id="finalBox"><div class="l">Tempo final</div><div class="v" id="finalV">0.00s</div></div>
     <div class="actions">
-      <button class="btn btn-gold btn-lg btn-block" id="btnSave" onclick="saveRun()">💾 Salvar passada</button>
-      <button class="btn btn-ghost btn-block" onclick="backToShooter()">‹ Voltar</button>
+      <button class="btn btn-gold btn-lg btn-block" id="btnSave" onclick="saveRun()">{{ ic('save') }} Salvar passada</button>
+      <button class="btn btn-ghost btn-block" onclick="backToShooter()">{{ ic('chev-l') }} Voltar</button>
     </div>
   </div>
 </section>
@@ -150,12 +177,27 @@
     <div class="final"><div class="l" id="doneL">Tempo final</div><div class="v" id="doneV">—</div></div>
     <div class="muted small" id="doneMeta"></div>
     <div class="actions">
-      <button class="btn btn-gold btn-lg btn-block" id="btnPrint" onclick="printLast(this)">🖨️ Imprimir cupom</button>
-      <button class="btn btn-block" onclick="samePrint()">🔁 Nova passada do mesmo atirador</button>
-      <button class="btn btn-block" onclick="go('pick'); loadList()">👥 Próximo atirador</button>
+      <button class="btn btn-gold btn-lg btn-block" id="btnPrint" onclick="printLast(this)">{{ ic('print') }} Imprimir cupom</button>
+      <button class="btn btn-block" onclick="samePrint()">{{ ic('refresh') }} Nova passada do mesmo atirador</button>
+      <button class="btn btn-block" onclick="go('pick'); loadList()">{{ ic('users') }} Próximo atirador</button>
     </div>
   </div>
 </section>
+
+<!-- ficha de confirmação: antes de iniciar e antes de salvar -->
+<div class="sheet hide" id="sheet" role="dialog" aria-modal="true">
+  <div class="sheet-card">
+    <div class="hd" id="shtHead">Confira antes de iniciar</div>
+    <div class="who" id="shtWho">—</div>
+    <div class="wbig" id="shtWeapon"></div>
+    <div class="sum hide" id="shtSum"></div>
+    <div class="alt" id="shtAlt"></div>
+    <div class="actions">
+      <button class="btn btn-gold btn-lg btn-block" id="shtOk"></button>
+      <button class="btn btn-ghost btn-block" onclick="closeSheet()">{{ ic('chev-l') }} Voltar e ajustar</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 {% endblock %}
@@ -175,6 +217,22 @@ function $(id){ return document.getElementById(id); }
 function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
 function norm(s){ return (s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/\s+/g,' ').trim(); }
 function f2(x){ return (Math.round(x*100)/100).toFixed(2); }
+/* arma: ícone e cor fixos por modalidade (mesma paleta dos indicadores, na ordem das modalidades) */
+var WPAL = ['#a8902a', '#3a92cc', '#cf6a3c'];
+function modOf(c){ return MODS.find(function(x){ return x.code===c; }) || {code:c, label:c}; }
+function modColor(c){ var i = MODS.findIndex(function(x){ return x.code===c; }); return WPAL[i>=0 && i<WPAL.length ? i : WPAL.length-1]; }
+function modIcon(c){ var s = norm(modOf(c).label+' '+c);
+  if(/PIST/.test(s)) return 'k-pistol'; if(/REVOLV/.test(s)) return 'k-revolver';
+  if(/ESPING|SHOT|CAL(IBRE)? ?12/.test(s)) return 'k-shotgun'; if(/CARAB|RIFLE|FUZIL/.test(s)) return 'k-rifle';
+  return 'k-bullet'; }
+function wband(c){
+  if(!c) return '<div class="wband none">'+IC('k-bullet')+'<div class="w"><b>Arma não escolhida</b><span>Toque na arma acima</span></div></div>';
+  var cat = CATS[c];
+  return '<div class="wband" style="--mc:'+modColor(c)+'">'+IC(modIcon(c))+'<div class="w"><b>'+esc(modOf(c).label)+'</b>'+
+    '<span>Categoria: '+(cat?esc(cat.name):'sem categoria')+'</span></div></div>'; }
+function altBtns(onpick, cls){
+  return MODS.filter(function(m){ return m.code!==MOD && CATS[m.code]; }).map(function(m){
+    return '<button class="btn '+(cls||'')+'" style="--mc:'+modColor(m.code)+'" onclick="'+onpick+'(\''+m.code+'\')">'+IC(modIcon(m.code))+' Trocar para '+esc(m.label)+'</button>'; }).join(''); }
 var toastT=null;
 function toast(s, err){ var m=$('toast'); m.textContent=s; m.className='toast show'+(err?' err':''); clearTimeout(toastT); toastT=setTimeout(function(){ m.classList.remove('show'); }, 3500); }
 function go(name){ document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('on'); });
@@ -206,47 +264,49 @@ function renderList(){
   var h='';
   if(!PARTS.length){ h='<div class="muted" style="padding:20px 0">Nenhum atirador inscrito na etapa. A recepção marca a presença em Inscrições.</div>'; }
   else{
-    h += '<h3>⏳ Aguardando ('+wait.length+')</h3>'+(wait.length?'<div class="list">'+wait.map(row).join('')+'</div>':'<div class="muted small">ninguém</div>');
-    h += '<h3>✅ Já passaram ('+done.length+')</h3>'+(done.length?'<div class="list">'+done.map(row).join('')+'</div>':'<div class="muted small">ninguém</div>');
+    h += '<h3>Aguardando ('+wait.length+')</h3>'+(wait.length?'<div class="list">'+wait.map(row).join('')+'</div>':'<div class="muted small">ninguém</div>');
+    h += '<h3>Já passaram ('+done.length+')</h3>'+(done.length?'<div class="list">'+done.map(row).join('')+'</div>':'<div class="muted small">ninguém</div>');
   }
   $('groups').innerHTML = h;
 }
 $('q').addEventListener('input', renderList);
 
 /* ============================ B · atirador ============================ */
-var SH = null, MOD = null, CATS = {}, SHRUNS = [];
+var SH = null, MOD = null, CATS = {}, SHRUNS = [], HIST = {};
 async function pickShooter(id){
   try{
     var d = await api('/interno/api/linha/atirador/'+id);
-    SH = d.shooter; CATS = d.categories; SHRUNS = d.runs || [];
+    SH = d.shooter; CATS = d.categories; SHRUNS = d.runs || []; HIST = d.history || {};
     $('shName').textContent = SH.name;
     $('shRunsBox').classList.toggle('hide', !SHRUNS.length);
-    $('shRunsBtn').textContent = '📋 Resultados lançados ('+SHRUNS.length+')';
+    $('shRunsBtn').innerHTML = IC('list')+' Resultados lançados ('+SHRUNS.length+')';
     $('shRuns').classList.add('hide');
     $('shRuns').innerHTML = SHRUNS.map(function(r,i){
       var m = MODS.find(function(x){return x.code===r.modality;});
       return '<div class="runrow"><div class="t">'+(r.dq?'DQ':f2(r.final)+'s')+'</div><div class="m">'+esc(m?m.label:r.modality)+' · '+esc(r.category)+
         (r.pen_secs?' · +'+r.pen_secs+'s pen.':'')+(r.n_shots?' · '+r.n_shots+' disparos':'')+'</div>'+
-        '<button class="btn btn-sm" onclick="printRun(SHRUNS['+i+'], SH.name, this)">🖨️</button></div>';
+        '<button class="btn btn-sm" onclick="printRun(SHRUNS['+i+'], SH.name, this)" title="Imprimir" aria-label="Imprimir">'+IC('print')+'</button></div>';
     }).join('');
-    // arma: mantém a última usada pelo atirador nesta etapa, senão a primeira
-    MOD = SHRUNS.length ? SHRUNS[0].modality : (MOD || MODS[0].code);
+    // arma: a última usada pelo atirador NESTA etapa; senão, a única que ele já usou na vida;
+    // senão nenhuma (o RO escolhe). Nunca herda a arma do atirador anterior.
+    if(SHRUNS.length) MOD = SHRUNS[0].modality;
+    else { var used = MODS.filter(function(m){ return HIST[m.code] && CATS[m.code]; }); MOD = used.length===1 ? used[0].code : null; }
     renderMods();
     go('shooter');
   }catch(e){ toast('Erro: '+e.message, true); }
 }
+function pickMod(c){ MOD = c; renderMods(); }
 function toggleRuns(){ $('shRuns').classList.toggle('hide'); }
 function renderMods(){
   $('modChips').innerHTML = MODS.map(function(m){
     var c = CATS[m.code];
-    return '<button class="chip'+(m.code===MOD?' on':'')+'" onclick="MOD=\''+m.code+'\';renderMods()">'+esc(m.label)+
-      '<small>'+(c?esc(c.name):'sem categoria')+'</small></button>';
+    return '<button class="chip'+(m.code===MOD?' on':'')+'" style="--mc:'+modColor(m.code)+'" '+(c?'':'disabled ')+
+      'onclick="pickMod(\''+m.code+'\')">'+IC(modIcon(m.code))+esc(m.label)+'<small>'+(c?esc(c.name):'sem categoria')+'</small>'+
+      (c && !HIST[m.code] ? '<span class="first">1ª vez nesta arma</span>' : '')+'</button>';
   }).join('');
-  var c = CATS[MOD];
-  var ml = (MODS.find(function(x){return x.code===MOD;})||{}).label || MOD;
-  $('confirmTxt').innerHTML = 'Confira: <b>'+esc(SH.name)+'</b> · '+esc(ml)+' · '+(c?esc(c.name):'<span style="color:#f0a0a0">sem categoria cadastrada</span>');
-  $('btnStart').disabled = !c;
-  $('startHint').textContent = timerChar ? 'O timer dispara o beep sozinho ao iniciar.' : 'Timer não conectado: ao iniciar, dê o start no próprio timer — os disparos serão lidos se ele conectar; ou lance o tempo manualmente.';
+  $('confirmTxt').innerHTML = wband(MOD);
+  $('btnStart').disabled = !(MOD && CATS[MOD]);
+  $('startHint').textContent = !MOD ? 'Escolha a arma antes de iniciar.' : timerChar ? 'O timer dispara o beep sozinho ao iniciar.' : 'Timer não conectado: ao iniciar, dê o start no próprio timer — os disparos serão lidos se ele conectar; ou lance o tempo manualmente.';
 }
 
 /* ============================ Timer Special Pie (BLE) ============================ */
@@ -285,8 +345,8 @@ function onTimerPacket(ev){
   else if(type===0x18){ onTimerStop(b[3]); }
 }
 function onTimerStart(str){
-  if(!RUN){ // RO deu start no aparelho com atirador escolhido: entra na passada
-    if(SH && document.getElementById('scrShooter').classList.contains('on') && CATS[MOD]){ beginRun(); } else return;
+  if(!RUN){ // RO deu start no aparelho com atirador e arma escolhidos: entra na passada
+    if(SH && MOD && CATS[MOD] && $('scrShooter').classList.contains('on') && $('sheet').classList.contains('hide')){ beginRun(); } else return;
   }
   if(RUN.state==='armed' || RUN.state==='paused'){ RUN.str=str; RUN.state='live'; RUN.seg+=1; renderRun(); }
 }
@@ -317,11 +377,14 @@ function showLast(){
 function beginRun(){
   RUN = {shots:[], offset:0, seg:0, str:null, state:'armed'};
   $('runName').textContent = SH.name;
-  var ml=(MODS.find(function(x){return x.code===MOD;})||{}).label||MOD;
-  $('runMeta').textContent = ml+' · '+(CATS[MOD]?CATS[MOD].name:'');
+  $('runMeta').innerHTML = wband(MOD);
   renderRun(); go('run');
 }
-async function startRun(){
+function startRun(){
+  if(!(MOD && CATS[MOD])){ toast('Escolha a arma antes de iniciar.', true); return; }
+  openSheet('start');
+}
+async function doStartRun(){
   beginRun();
   if(timerWrite){ var ok = await timerCmd(0x34); if(!ok) toast('Não consegui acionar o timer. Dê o start no aparelho.', true); }
   else toast('Timer não conectado — dê o start no aparelho.');
@@ -335,7 +398,7 @@ function renderRun(){
     var split = i ? s.t - RUN.shots[i-1].t : s.t;
     return '<div class="shot'+(i && RUN.shots[i-1].seg!==s.seg?' seg':'')+'">'+f2(s.t)+'<small>#'+(i+1)+' · '+f2(split)+'</small></div>';
   }).join('') || '<span class="muted small">nenhum disparo ainda</span>';
-  $('btnSum').textContent = RUN.state==='paused' ? '▶ Continuar (novo acionamento)' : '➕ Somar passada';
+  $('btnSum').innerHTML = RUN.state==='paused' ? IC('play')+' Continuar (novo acionamento)' : IC('plus')+' Somar passada';
 }
 async function sumRun(){
   // pane na pista: para o timer, guarda o tempo corrido e, no próximo start, continua somando
@@ -373,8 +436,8 @@ var FIN = null; // {shots, segments, time, p2,p5,p10, dq}
 function openFinish(shots, segments){
   FIN = {shots:shots, segments:segments, time: shots.length ? shots[shots.length-1] : null, p2:0,p5:0,p10:0, dq:false, sel: shots.length-1};
   $('finName').textContent = SH.name;
-  var ml=(MODS.find(function(x){return x.code===MOD;})||{}).label||MOD;
-  $('finMeta').textContent = ml+' · '+(CATS[MOD]?CATS[MOD].name:'')+(shots.length?' · '+shots.length+' disparos':' · lançamento manual');
+  renderFinWeapon();
+  $('finMeta').textContent = shots.length ? shots.length+' disparos recebidos do timer' : 'Lançamento manual';
   $('finShotsWrap').classList.toggle('hide', !shots.length);
   $('finTime').value = FIN.time!=null ? f2(FIN.time) : '';
   $('p2').textContent='0'; $('p5').textContent='0'; $('p10').textContent='0';
@@ -390,17 +453,50 @@ function renderFinShots(){
 function selShot(i){ FIN.sel=i; FIN.time=FIN.shots[i]; $('finTime').value=f2(FIN.time); renderFinShots(); renderFinal(); }
 $('finTime').addEventListener('input', function(){ FIN.time = parseFloat(this.value.replace(',','.')); FIN.sel=-1; renderFinShots(); renderFinal(); });
 function pen(k,d){ var key='p'+k; FIN[key]=Math.max(0, FIN[key]+d); $(key).textContent=FIN[key]; renderFinal(); }
-function toggleDQ(){ FIN.dq=!FIN.dq; $('dqBtn').textContent = FIN.dq ? '🟥 DQ marcado (toque para desfazer)' : '⬜ Desqualificar (DQ)'; renderFinal(); }
+function toggleDQ(){ FIN.dq=!FIN.dq; $('dqBtn').innerHTML = FIN.dq ? IC('ban')+' DQ marcado (toque para desfazer)' : IC('square')+' Desqualificar (DQ)'; $('dqBtn').classList.toggle('btn-danger', FIN.dq); renderFinal(); }
 function renderFinal(){
   var box=$('finalBox'); box.classList.toggle('dq', FIN.dq);
   if(FIN.dq){ $('finalV').textContent='DQ'; return; }
   var t = FIN.time; if(!(t>0)){ $('finalV').textContent='—'; return; }
   $('finalV').textContent = f2(t + FIN.p2*2 + FIN.p5*5 + FIN.p10*10)+'s';
 }
-function backToShooter(){ go('shooter'); }
+function renderFinWeapon(){ $('finWeapon').innerHTML = wband(MOD)+'<div class="alt" style="display:flex; gap:8px; flex-wrap:wrap; margin:8px 0 6px">'+altBtns('finSwap','btn-sm')+'</div>'; }
+function finSwap(c){ MOD = c; renderFinWeapon(); toast('Arma alterada para '+modOf(c).label+' ('+CATS[c].name+')'); }
+function backToShooter(){ renderMods(); go('shooter'); }
+
+/* ============================ ficha de confirmação ============================ */
+var SHEET = null;
+function openSheet(kind){ SHEET = kind; renderSheet(); $('sheet').classList.remove('hide'); }
+function closeSheet(){ $('sheet').classList.add('hide'); SHEET = null; if(SH){ renderMods(); if(FIN) renderFinWeapon(); } }
+function sheetSwap(c){ MOD = c; renderSheet(); }
+function renderSheet(){
+  var c = CATS[MOD];
+  $('shtHead').textContent = SHEET==='start' ? 'Confira antes de iniciar' : 'Confira antes de salvar';
+  $('shtWho').textContent = SH.name;
+  var w = $('shtWeapon'); w.style.setProperty('--mc', modColor(MOD));
+  w.innerHTML = IC(modIcon(MOD))+'<b>'+esc(modOf(MOD).label)+'</b><span>Categoria: '+(c?esc(c.name):'—')+'</span>'+
+    (!HIST[MOD] ? '<span style="color:var(--warn); font-size:13px; font-weight:600">Primeira vez do atirador nesta arma</span>' : '');
+  var sum = $('shtSum');
+  if(SHEET==='save'){
+    var pens = FIN.p2*2 + FIN.p5*5 + FIN.p10*10;
+    sum.innerHTML = '<div><small>Tempo de pista</small><b>'+(FIN.dq?'—':f2(FIN.time)+'s')+'</b></div>'+
+      '<div><small>Penalidades</small><b>'+(pens?'+'+pens+'s':'0')+'</b></div>'+
+      '<div style="grid-column:1/-1"><small>Tempo final</small><b>'+(FIN.dq?'DQ':f2(FIN.time+pens)+'s')+'</b></div>';
+    sum.classList.remove('hide');
+  } else sum.classList.add('hide');
+  $('shtAlt').innerHTML = altBtns('sheetSwap');
+  var ok = $('shtOk');
+  ok.innerHTML = SHEET==='start' ? IC('play')+' Confirmar e iniciar' : IC('save')+' Confirmar e salvar';
+  ok.onclick = function(){ var k = SHEET; $('sheet').classList.add('hide'); SHEET = null;
+    if(k==='start'){ renderMods(); doStartRun(); } else { renderFinWeapon(); doSaveRun(); } };
+}
 var LAST=null;
-async function saveRun(){
+function saveRun(){
   if(!FIN.dq && !(FIN.time>0)){ toast('Informe o tempo de pista.', true); return; }
+  if(!(MOD && CATS[MOD])){ toast('Escolha a arma.', true); return; }
+  openSheet('save');
+}
+async function doSaveRun(){
   $('btnSave').disabled=true;
   try{
     var d = await api('/interno/api/linha/salvar', {shooter_id:SH.id, modality:MOD, raw_time:FIN.dq?null:FIN.time,
@@ -408,9 +504,8 @@ async function saveRun(){
     LAST = d; RUN=null;
     $('doneName').textContent = d.shooter;
     $('doneV').textContent = d.run.dq ? 'DQ' : f2(d.run.final)+'s';
-    var ml=(MODS.find(function(x){return x.code===MOD;})||{}).label||MOD;
-    $('doneMeta').innerHTML = esc(ml)+' · '+esc(d.run.category)+(d.pos?' · <b>'+d.pos+'º</b> de '+d.n_in_cat+' na categoria':'')+
-      (d.runs_total>1?' · vale a melhor: <b>'+f2(d.best)+'s</b>':'');
+    $('doneMeta').innerHTML = wband(MOD)+'<div style="margin-top:8px">'+esc(d.run.category)+(d.pos?' · <b>'+d.pos+'º</b> de '+d.n_in_cat+' na categoria':'')+
+      (d.runs_total>1?' · vale a melhor: <b>'+f2(d.best)+'s</b>':'')+'</div>';
     go('done');
     if(printerChar) printLast($('btnPrint'));
   }catch(e){ toast('Erro ao salvar: '+e.message, true); }

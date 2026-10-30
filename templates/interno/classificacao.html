@@ -4,8 +4,8 @@
 <h1 class="pg">Classificação</h1>
 <p class="lead">Mesmos números do site público. Menor tempo da categoria vale 100 pontos; no mês contam as melhores etapas (descarta a pior).</p>
 <div class="sub-tabs">
-  <button class="on" onclick="tab(this,'tEtapa')">🎯 Etapa aberta</button>
-  <button onclick="tab(this,'tMes')">🏆 Mês</button>
+  <button class="on" onclick="tab(this,'tEtapa')">{{ ic('target') }} Etapa aberta</button>
+  <button onclick="tab(this,'tMes')">{{ ic('trophy') }} Mês</button>
 </div>
 <section id="tEtapa">
   {% if not open_stage %}<div class="box muted">Não há etapa aberta.</div>{% endif %}

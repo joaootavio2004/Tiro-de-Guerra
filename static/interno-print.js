@@ -64,7 +64,7 @@ async function printRun(r, name, btn){
   if(!printerChar){ toast('Conecte a impressora primeiro.', true); return; }
   if(printing){ toast('Aguarde, imprimindo…'); return; }
   printing=true; var old=btn?btn.textContent:null; if(btn){btn.disabled=true; btn.textContent='Imprimindo…';}
-  try{ await sendBytes(buildReceipt(r, name||'', (typeof STAGE!=='undefined' && STAGE) ? STAGE : (window.STAGE_LABEL||''))); toast('Cupom enviado ✔'); }
+  try{ await sendBytes(buildReceipt(r, name||'', (typeof STAGE!=='undefined' && STAGE) ? STAGE : (window.STAGE_LABEL||''))); toast('Cupom enviado'); }
   catch(e){ toast('Erro ao imprimir: '+e.message, true); }
   finally{ printing=false; if(btn){btn.disabled=false; btn.textContent=old;} }
 }

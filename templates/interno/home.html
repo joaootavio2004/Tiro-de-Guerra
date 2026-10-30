@@ -3,28 +3,33 @@
 {% block content %}
 <h1 class="pg">Olá, {{ user.name.split(' ')[0] }}</h1>
 <p class="lead">
-  {% if open_stage %}Etapa aberta: <b style="color:var(--gold-bright)">{{ open_stage_label }}</b> · {{ fmt_date(open_stage.date) }}
-  {% else %}Não há etapa aberta no momento{% if 'admin' in perms %} — abra uma em <a href="/interno/etapas">Etapas</a>{% endif %}.{% endif %}
+  {% if open_stage %}Etapa aberta: <b>{{ open_stage_label }}</b> · {{ fmt_date(open_stage.date) }}
+  {% else %}Não há etapa aberta no momento{% if 'admin' in perms %}. Abra uma em <a href="/interno/etapas">Etapas</a>{% endif %}.{% endif %}
 </p>
 {% if cards %}
 <div class="cards">
   {% for c in cards %}<div class="kpi"><div class="v">{{ c[1] }}</div><div class="l">{{ c[0] }}</div></div>{% endfor %}
 </div>
 {% endif %}
-<div class="grid2">
+<div class="sec-title">Acesso rápido</div>
+<div class="tiles">
   {% for n in nav %}
-  <a class="box" href="{{ n[1] }}" style="text-decoration:none; display:block">
-    <h2>{{ n[3] }} {{ n[2] }}</h2>
-    <div class="muted small">
+  <a class="tile" href="{{ n[1] }}">
+    <span class="ico">{{ ic(n[3]) }}</span>
+    <div>
+      <b>{{ n[2] }}</b>
+      <span>
       {% if n[1].endswith('linha') %}Lançar passadas com timer e impressora.
       {% elif n[1].endswith('lancamentos') %}Conferir, apagar ou reimprimir passadas da etapa.
       {% elif n[1].endswith('inscricoes') %}Marcar presença dos atiradores e ver passadas para cobrança.
       {% elif n[1].endswith('atiradores') %}Cadastro, correção de nome/CPF, categorias e mesclagem.
       {% elif n[1].endswith('classificacao') %}Classificação da etapa e do mês por categoria.
+      {% elif n[1].endswith('indicadores') %}Participação e passadas por etapa e por mês, em gráficos.
       {% elif n[1].endswith('etapas') %}Abrir/fechar etapas, PDFs e fechamento do mês.
       {% elif n[1].endswith('categorias') %}Modalidades, categorias, limites e promoções.
       {% elif n[1].endswith('usuarios') %}Logins da área interna, cargos e permissões.
       {% endif %}
+      </span>
     </div>
   </a>
   {% endfor %}
