@@ -1,9 +1,9 @@
 """
-Extensões de banco para a ÁREA INTERNA (/interno).
+Extensões de banco para a ÁREA INTERNA (admin.tirodeguerra.com.br).
 
 Tudo aqui é ADITIVO: cria tabelas novas e colunas novas com
 "IF NOT EXISTS" / ALTER TABLE ADD COLUMN. Nunca apaga nem altera dados
-existentes — o banco em produção continua válido para o bot.
+existentes do banco em produção.
 
 Novidades:
 - web_users / web_sessions : login da área interna (cargos = tabela roles)
@@ -241,8 +241,8 @@ def remove_checkin(conn, stage_id: int, shooter_id: int) -> None:
 
 
 def stage_participants(conn, stage_id: int) -> List[Dict[str, Any]]:
-    """Todos os atiradores da etapa: check-ins da recepção (site) + inscrições
-    feitas pelo bot. Cada um com quantas passadas já tem e em quais armas."""
+    """Todos os atiradores da etapa: check-ins da recepção + inscrições
+    antigas (feitas pelo extinto bot do Telegram). Cada um com quantas passadas já tem e em quais armas."""
     rows = conn.execute(
         "SELECT DISTINCT s.id, s.name FROM shooters s WHERE s.active=1 AND ("
         " s.id IN (SELECT shooter_id FROM stage_checkins WHERE stage_id=?) OR"

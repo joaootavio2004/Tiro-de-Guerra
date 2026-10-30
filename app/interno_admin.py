@@ -70,11 +70,11 @@ async def regra_mes(request: Request, best_max: int = Form(3), min_discard: int 
     try:
         need(request, conn, "admin")
         if not (0 <= best_max <= 20 and 0 <= min_discard <= 10):
-            return back("/interno/etapas", "Valores fora do limite.")
+            return back("/etapas", "Valores fora do limite.")
         webdb.set_rule(conn, best_max, min_discard)
         conn.commit()
         log.info("Regra do mês alterada: máximo %s, descarte mínimo %s", best_max, min_discard)
-        return back("/interno/etapas", "Regra atualizada. Vale para o mês aberto e os próximos.")
+        return back("/etapas", "Regra atualizada. Vale para o mês aberto e os próximos.")
     finally:
         conn.close()
 
@@ -85,7 +85,7 @@ async def etapa_nova(request: Request, date: str = Form("")):
     try:
         need(request, conn, "admin")
         if db.get_open_stage(conn):
-            return back("/interno/etapas", "Já existe uma etapa aberta. Feche-a antes.")
+            return back("/etapas", "Já existe uma etapa aberta. Feche-a antes.")
         month = db.ensure_current_month(conn)
         iso = texts.parse_date(date) if date else None
         s = db.create_stage(conn, month["id"], iso)
@@ -93,7 +93,7 @@ async def etapa_nova(request: Request, date: str = Form("")):
         label = stage_label(conn, s)
     finally:
         conn.close()
-    return back("/interno/etapas", f"{label} aberta.")
+    return back("/etapas", f"{label} aberta.")
 
 
 @router.post("/etapas/{stage_id}/fechar")
@@ -105,7 +105,7 @@ async def etapa_fechar(request: Request, stage_id: int):
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/etapas", "Etapa fechada. Baixe os PDFs pelos botões da etapa.")
+    return back("/etapas", "Etapa fechada. Baixe os PDFs pelos botões da etapa.")
 
 
 @router.post("/etapas/{stage_id}/reabrir")
@@ -114,16 +114,16 @@ async def etapa_reabrir(request: Request, stage_id: int):
     try:
         need(request, conn, "admin")
         if db.get_open_stage(conn):
-            return back("/interno/etapas", "Já existe uma etapa aberta.")
+            return back("/etapas", "Já existe uma etapa aberta.")
         s = db.get_stage(conn, stage_id)
         m = db.get_month(conn, s["month_id"]) if s else None
         if not m or m["status"] != "aberto":
-            return back("/interno/etapas", "Só é possível reabrir etapas do mês aberto.")
+            return back("/etapas", "Só é possível reabrir etapas do mês aberto.")
         db.reopen_stage(conn, stage_id)
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/etapas", "Etapa reaberta.")
+    return back("/etapas", "Etapa reaberta.")
 
 
 @router.post("/etapas/{stage_id}/data")
@@ -133,12 +133,12 @@ async def etapa_data(request: Request, stage_id: int, date: str = Form("")):
         need(request, conn, "admin")
         iso = texts.parse_date(date)
         if not iso:
-            return back("/interno/etapas", "Data inválida (use DD/MM/AAAA).")
+            return back("/etapas", "Data inválida (use DD/MM/AAAA).")
         db.update_stage_date(conn, stage_id, iso)
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/etapas", "Data alterada.")
+    return back("/etapas", "Data alterada.")
 
 
 @router.post("/etapas/{stage_id}/excluir")
@@ -151,7 +151,7 @@ async def etapa_excluir(request: Request, stage_id: int):
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/etapas", "Etapa excluída.")
+    return back("/etapas", "Etapa excluída.")
 
 
 @router.get("/etapas/{stage_id}/pdf")
@@ -194,7 +194,7 @@ async def mes_fechar_post(request: Request):
         need(request, conn, "admin")
         month = db.get_open_month(conn)
         if db.get_open_stage(conn):
-            return back("/interno/etapas", "Feche a etapa aberta antes de fechar o mês.")
+            return back("/etapas", "Feche a etapa aberta antes de fechar o mês.")
         prop = st.promotion_proposal(conn, month["id"])
         st.apply_promotions(conn, prop["moves"])
         webdb.freeze_month_rule(conn, month["id"])
@@ -205,7 +205,7 @@ async def mes_fechar_post(request: Request):
         mid = month["id"]
     finally:
         conn.close()
-    return back("/interno/etapas",
+    return back("/etapas",
                 f"Mês fechado e categorias atualizadas. PDFs em 'Meses fechados' (id {mid}).")
 
 
@@ -234,7 +234,7 @@ async def mes_limpar(request: Request, confirm: str = Form("")):
     try:
         need(request, conn, "admin")
         if confirm != "LIMPAR":
-            return back("/interno/etapas", "Digite LIMPAR para confirmar.")
+            return back("/etapas", "Digite LIMPAR para confirmar.")
         month = db.get_open_month(conn)
         for s in db.list_stages(conn, month["id"]):
             conn.execute("DELETE FROM stage_checkins WHERE stage_id=?", (s["id"],))
@@ -242,7 +242,7 @@ async def mes_limpar(request: Request, confirm: str = Form("")):
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/etapas", "Mês limpo: etapas, inscrições e resultados apagados.")
+    return back("/etapas", "Mês limpo: etapas, inscrições e resultados apagados.")
 
 
 # ============================================================================
@@ -274,13 +274,13 @@ async def categorias_limpar(request: Request, modality: str = Form("")):
     try:
         need(request, conn, "admin")
         if not db.get_modality(conn, modality):
-            return back("/interno/categorias", "Modalidade inválida.")
+            return back("/categorias", "Modalidade inválida.")
         path = webdb.backup_db(conn, os.path.join(os.path.dirname(config.DB_PATH), "backups"))
         n = webdb.clean_orphan_memberships(conn, modality)
         conn.commit()
         log.info("Limpeza de vínculos sem uso (%s): %d removido(s). Backup em %s",
                  modality, n, path)
-        return back("/interno/categorias",
+        return back("/categorias",
                     f"{texts.modality_label(modality)}: {n} cadastro(s) sem uso removido(s). Backup feito antes.")
     finally:
         conn.close()
@@ -292,13 +292,13 @@ async def modalidade_nova(request: Request, label: str = Form("")):
     try:
         need(request, conn, "admin")
         if len(label.strip()) < 2:
-            return back("/interno/categorias", "Nome inválido.")
+            return back("/categorias", "Nome inválido.")
         db.add_modality(conn, label)
         conn.commit()
         _refresh_labels(conn)
     finally:
         conn.close()
-    return back("/interno/categorias", "Modalidade criada. Cadastre ao menos uma categoria.")
+    return back("/categorias", "Modalidade criada. Cadastre ao menos uma categoria.")
 
 
 @router.post("/modalidades/{code}/renomear")
@@ -311,7 +311,7 @@ async def modalidade_renomear(request: Request, code: str, label: str = Form("")
         _refresh_labels(conn)
     finally:
         conn.close()
-    return back("/interno/categorias", "Modalidade renomeada.")
+    return back("/categorias", "Modalidade renomeada.")
 
 
 @router.post("/modalidades/{code}/excluir")
@@ -320,13 +320,13 @@ async def modalidade_excluir(request: Request, code: str):
     try:
         need(request, conn, "admin")
         if db.modality_in_use(conn, code):
-            return back("/interno/categorias", "Modalidade em uso — exclua as categorias antes.")
+            return back("/categorias", "Modalidade em uso — exclua as categorias antes.")
         db.delete_modality(conn, code)
         conn.commit()
         _refresh_labels(conn)
     finally:
         conn.close()
-    return back("/interno/categorias", "Modalidade excluída.")
+    return back("/categorias", "Modalidade excluída.")
 
 
 @router.post("/categorias/nova")
@@ -337,13 +337,13 @@ async def categoria_nova(request: Request, modality: str = Form(...), name: str 
     try:
         need(request, conn, "admin")
         if len(name.strip()) < 2:
-            return back("/interno/categorias", "Nome inválido.")
+            return back("/categorias", "Nome inválido.")
         mx = int(max_shooters) if max_shooters.strip().isdigit() else None
         db.add_category(conn, name.strip(), modality, mx, promote_n, demote_n)
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/categorias", "Categoria criada.")
+    return back("/categorias", "Categoria criada.")
 
 
 @router.post("/categorias/{cat_id}/editar")
@@ -359,7 +359,7 @@ async def categoria_editar(request: Request, cat_id: int, name: str = Form(""),
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/categorias", "Categoria salva.")
+    return back("/categorias", "Categoria salva.")
 
 
 @router.post("/categorias/{cat_id}/acao")
@@ -375,13 +375,13 @@ async def categoria_acao(request: Request, cat_id: int, acao: str = Form(...)):
             msg = "Categoria inicial definida."
         elif acao == "delete":
             if db.category_in_use(conn, cat_id):
-                return back("/interno/categorias", "Categoria em uso — não pode ser excluída.")
+                return back("/categorias", "Categoria em uso — não pode ser excluída.")
             db.delete_category(conn, cat_id)
             msg = "Categoria excluída."
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/categorias", msg)
+    return back("/categorias", msg)
 
 
 def _refresh_labels(conn):
@@ -402,9 +402,7 @@ async def usuarios(request: Request):
         roles = []
         for r in db.list_roles(conn):
             roles.append({"r": r, "perms": db.role_perms(conn, r["code"]),
-                          "members": db.role_member_count(conn, r["code"]) + conn.execute(
-                              "SELECT COUNT(*) AS n FROM web_users WHERE role=? AND active=1",
-                              (r["code"],)).fetchone()["n"]})
+                          "members": db.role_member_count(conn, r["code"])})
         return render(request, conn, "usuarios.html", user, perms,
                       users=webdb.list_users(conn), roles=roles,
                       permissions=db.PERMISSIONS)
@@ -420,18 +418,18 @@ async def usuario_novo(request: Request, username: str = Form(""), name: str = F
         need(request, conn, "admin")
         u = username.strip().lower()
         if len(u) < 3 or not u.replace(".", "").replace("_", "").isalnum():
-            return back("/interno/usuarios", "Usuário inválido (letras, números, ponto ou _).")
+            return back("/usuarios", "Usuário inválido (letras, números, ponto ou _).")
         if len(password) < 6:
-            return back("/interno/usuarios", "Senha muito curta (mínimo 6).")
+            return back("/usuarios", "Senha muito curta (mínimo 6).")
         if webdb.get_user_by_username(conn, u):
-            return back("/interno/usuarios", "Usuário já existe.")
+            return back("/usuarios", "Usuário já existe.")
         if not db.get_role(conn, role):
-            return back("/interno/usuarios", "Cargo inválido.")
+            return back("/usuarios", "Cargo inválido.")
         webdb.create_user(conn, u, name or u, password, role)
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/usuarios", f"Usuário {u} criado.")
+    return back("/usuarios", f"Usuário {u} criado.")
 
 
 @router.post("/usuarios/{uid}/editar")
@@ -442,15 +440,15 @@ async def usuario_editar(request: Request, uid: int, name: str = Form(""),
     try:
         me, _ = need(request, conn, "admin")
         if password and len(password) < 6:
-            return back("/interno/usuarios", "Senha muito curta (mínimo 6).")
+            return back("/usuarios", "Senha muito curta (mínimo 6).")
         if uid == me["id"] and (active != "1" or role != "admin"):
-            return back("/interno/usuarios", "Você não pode se rebaixar nem se desativar.")
+            return back("/usuarios", "Você não pode se rebaixar nem se desativar.")
         webdb.update_user(conn, uid, name=name or None, role=role or None,
                           password=password or None, active=1 if active == "1" else 0)
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/usuarios", "Usuário salvo.")
+    return back("/usuarios", "Usuário salvo.")
 
 
 @router.post("/cargos/novo")
@@ -459,13 +457,13 @@ async def cargo_novo(request: Request, label: str = Form("")):
     try:
         need(request, conn, "admin")
         if len(label.strip()) < 2:
-            return back("/interno/usuarios", "Nome inválido.")
+            return back("/usuarios", "Nome inválido.")
         db.add_role(conn, label)
         conn.commit()
         _refresh_labels(conn)
     finally:
         conn.close()
-    return back("/interno/usuarios", "Cargo criado — marque as permissões dele.")
+    return back("/usuarios", "Cargo criado — marque as permissões dele.")
 
 
 @router.post("/cargos/{code}/perm")
@@ -474,12 +472,12 @@ async def cargo_perm(request: Request, code: str, perm: str = Form(...)):
     try:
         need(request, conn, "admin")
         if code == "admin":
-            return back("/interno/usuarios", "Administrador tem todas as permissões.")
+            return back("/usuarios", "Administrador tem todas as permissões.")
         db.toggle_role_perm(conn, code, perm)
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/usuarios")
+    return back("/usuarios")
 
 
 @router.post("/cargos/{code}/excluir")
@@ -489,14 +487,13 @@ async def cargo_excluir(request: Request, code: str):
         need(request, conn, "admin")
         r = db.get_role(conn, code)
         if not r or r["builtin"]:
-            return back("/interno/usuarios", "Cargos padrão não podem ser excluídos.")
-        n = db.role_member_count(conn, code) + conn.execute(
-            "SELECT COUNT(*) AS n FROM web_users WHERE role=?", (code,)).fetchone()["n"]
+            return back("/usuarios", "Cargos padrão não podem ser excluídos.")
+        n = db.role_member_count(conn, code, only_active=False)
         if n:
-            return back("/interno/usuarios", "Há membros neste cargo — mova-os antes.")
+            return back("/usuarios", "Há membros neste cargo — mova-os antes.")
         db.delete_role(conn, code)
         conn.commit()
         _refresh_labels(conn)
     finally:
         conn.close()
-    return back("/interno/usuarios", "Cargo excluído.")
+    return back("/usuarios", "Cargo excluído.")

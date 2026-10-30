@@ -4,7 +4,7 @@
 <h1 class="pg">Etapas — {{ month_pt[month.month] }} {{ month.year }}</h1>
 <p class="lead">Mês aberto. {{ n_held }} etapa{{ 's' if n_held != 1 }} realizada{{ 's' if n_held != 1 }}; no mês contam as {{ best_n }} melhores (regra configurável abaixo). Só pode haver uma etapa aberta por vez.</p>
 <div class="grid2">
-  <form class="box" method="post" action="/interno/etapas/nova">
+  <form class="box" method="post" action="/etapas/nova">
     <h2>Nova etapa</h2>
     <div class="frow">
       <div><label>Data (DD/MM/AAAA, vazio = hoje)</label><input type="text" name="date" placeholder="hoje" inputmode="numeric"></div>
@@ -14,13 +14,13 @@
   <div class="box">
     <h2>Fechamento do mês</h2>
     <div class="muted small" style="margin-bottom:10px">Aplica subidas/descidas de categoria e abre o mês seguinte. Feche a etapa aberta antes.</div>
-    <a class="btn" href="/interno/mes/fechar">{{ ic('flag') }} Ver proposta e fechar o mês</a>
+    <a class="btn" href="/mes/fechar">{{ ic('flag') }} Ver proposta e fechar o mês</a>
     <div class="sep"></div>
-    <a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=mensal">{{ ic('file') }} PDF mensal (parcial)</a>
-    <a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=geral">{{ ic('trophy') }} PDF geral do mês</a>
+    <a class="btn btn-sm" href="/mes/{{ month.id }}/pdf?tipo=mensal">{{ ic('file') }} PDF mensal (parcial)</a>
+    <a class="btn btn-sm" href="/mes/{{ month.id }}/pdf?tipo=geral">{{ ic('trophy') }} PDF geral do mês</a>
   </div>
 </div>
-<form class="box" method="post" action="/interno/regra-mes"
+<form class="box" method="post" action="/regra-mes"
       onsubmit="return confirm('Alterar a regra? A classificação do mês aberto é recalculada na hora; meses fechados não mudam.')">
   <h2>Etapas que contam no mês</h2>
   <p class="muted small" style="margin:0 0 14px">Na classificação mensal somam-se as melhores etapas de cada atirador. Vale para o mês aberto e os seguintes; cada mês fechado guarda a regra com que foi apurado.</p>
@@ -41,15 +41,15 @@
       <div class="meta">{{ r.participants }} inscrito(s) · {{ r.results }} passada(s) lançada(s)</div>
     </div>
     <div style="display:flex; gap:6px; flex-wrap:wrap">
-      <a class="btn btn-sm" href="/interno/etapas/{{ r.s.id }}/pdf?tipo=etapa">{{ ic('file') }} PDF</a>
-      <a class="btn btn-sm" href="/interno/etapas/{{ r.s.id }}/pdf?tipo=geral">{{ ic('trophy') }} Geral</a>
+      <a class="btn btn-sm" href="/etapas/{{ r.s.id }}/pdf?tipo=etapa">{{ ic('file') }} PDF</a>
+      <a class="btn btn-sm" href="/etapas/{{ r.s.id }}/pdf?tipo=geral">{{ ic('trophy') }} Geral</a>
       {% if r.s.status == 'aberta' %}
-      <form class="inline" method="post" action="/interno/etapas/{{ r.s.id }}/fechar" onsubmit="return confirm('Fechar a {{ r.s.number }}ª etapa? Os lançamentos param.')"><button class="btn btn-sm btn-gold">{{ ic('lock') }} Fechar</button></form>
+      <form class="inline" method="post" action="/etapas/{{ r.s.id }}/fechar" onsubmit="return confirm('Fechar a {{ r.s.number }}ª etapa? Os lançamentos param.')"><button class="btn btn-sm btn-gold">{{ ic('lock') }} Fechar</button></form>
       {% else %}
-      <form class="inline" method="post" action="/interno/etapas/{{ r.s.id }}/reabrir"><button class="btn btn-sm" {% if has_open %}disabled{% endif %}>{{ ic('unlock') }} Reabrir</button></form>
+      <form class="inline" method="post" action="/etapas/{{ r.s.id }}/reabrir"><button class="btn btn-sm" {% if has_open %}disabled{% endif %}>{{ ic('unlock') }} Reabrir</button></form>
       {% endif %}
-      <form class="inline" method="post" action="/interno/etapas/{{ r.s.id }}/data" onsubmit="var d=prompt('Nova data (DD/MM/AAAA):','{{ fmt_date(r.s.date) }}'); if(!d) return false; this.date.value=d;"><input type="hidden" name="date"><button class="btn btn-sm">{{ ic('calendar') }} Data</button></form>
-      <form class="inline" method="post" action="/interno/etapas/{{ r.s.id }}/excluir" onsubmit="return confirm('EXCLUIR a {{ r.s.number }}ª etapa com {{ r.results }} passada(s)? Não pode ser desfeito.')"><button class="btn btn-sm btn-danger" title="Excluir etapa" aria-label="Excluir etapa">{{ ic('trash') }}</button></form>
+      <form class="inline" method="post" action="/etapas/{{ r.s.id }}/data" onsubmit="var d=prompt('Nova data (DD/MM/AAAA):','{{ fmt_date(r.s.date) }}'); if(!d) return false; this.date.value=d;"><input type="hidden" name="date"><button class="btn btn-sm">{{ ic('calendar') }} Data</button></form>
+      <form class="inline" method="post" action="/etapas/{{ r.s.id }}/excluir" onsubmit="return confirm('EXCLUIR a {{ r.s.number }}ª etapa com {{ r.results }} passada(s)? Não pode ser desfeito.')"><button class="btn btn-sm btn-danger" title="Excluir etapa" aria-label="Excluir etapa">{{ ic('trash') }}</button></form>
     </div>
   </div>
   {% else %}<div class="muted small">Nenhuma etapa neste mês ainda.</div>{% endfor %}
@@ -59,14 +59,14 @@
   <h2>Meses fechados</h2>
   {% for m in closed_months %}
   <div class="item" style="margin-bottom:6px"><div class="who"><div class="nm">{{ month_pt[m.month] }} {{ m.year }}</div></div>
-    <a class="btn btn-sm" href="/interno/mes/{{ m.id }}/pdf?tipo=mensal">{{ ic('file') }} Mensal</a><a class="btn btn-sm" href="/interno/mes/{{ m.id }}/pdf?tipo=geral">{{ ic('trophy') }} Geral</a>
-    <a class="btn btn-sm" href="/interno/classificacao?mes={{ m.id }}">Ver</a></div>
+    <a class="btn btn-sm" href="/mes/{{ m.id }}/pdf?tipo=mensal">{{ ic('file') }} Mensal</a><a class="btn btn-sm" href="/mes/{{ m.id }}/pdf?tipo=geral">{{ ic('trophy') }} Geral</a>
+    <a class="btn btn-sm" href="/classificacao?mes={{ m.id }}">Ver</a></div>
   {% endfor %}
 </div>
 {% endif %}
 <details class="box danger">
   <summary style="cursor:pointer">{{ ic('alert') }} Zona de perigo — limpar o mês</summary>
-  <form method="post" action="/interno/mes/limpar" style="margin-top:12px">
+  <form method="post" action="/mes/limpar" style="margin-top:12px">
     <div class="muted small" style="margin-bottom:8px">Apaga TODAS as etapas, inscrições e resultados do mês aberto (atiradores e categorias ficam). Digite LIMPAR para confirmar.</div>
     <div class="frow"><div><input type="text" name="confirm" placeholder="LIMPAR"></div><div><button class="btn btn-danger">Limpar mês</button></div></div>
   </form>

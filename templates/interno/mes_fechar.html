@@ -1,7 +1,7 @@
 {% extends "interno/_base.html" %}
 {% block title %}Fechar mês{% endblock %}
 {% block content %}
-<a class="btn btn-ghost btn-sm" href="/interno/etapas">{{ ic('chev-l') }} Etapas</a>
+<a class="btn btn-ghost btn-sm" href="/etapas">{{ ic('chev-l') }} Etapas</a>
 <h1 class="pg" style="margin-top:12px">Fechar {{ month_pt[month.month] }} {{ month.year }}</h1>
 <p class="lead">Proposta de subidas e descidas calculada pela configuração das categorias (quantos sobem/descem). Ao confirmar, as categorias mudam e o mês seguinte é aberto. Meses fechados não mudam mais.</p>
 {% if open_stage_exists %}<div class="note" style="margin-bottom:18px">{{ ic('alert') }} Há uma etapa aberta. Feche-a antes de fechar o mês.</div>{% endif %}
@@ -15,8 +15,8 @@
   {% if warnings %}<div class="sep"></div><div class="list">{% for w in warnings %}<div class="note">{{ ic('alert') }} {{ w }}</div>{% endfor %}</div>{% endif %}
 </div>
 <div class="grid2">
-  <div class="box"><h2>Antes de fechar</h2><a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=mensal">{{ ic('file') }} PDF mensal com as movimentações</a> <a class="btn btn-sm" href="/interno/mes/{{ month.id }}/pdf?tipo=geral">{{ ic('trophy') }} PDF geral</a></div>
-  <form class="box" method="post" action="/interno/mes/fechar" onsubmit="return confirm('Confirmar o fechamento do mês? As categorias serão atualizadas.')">
+  <div class="box"><h2>Antes de fechar</h2><a class="btn btn-sm" href="/mes/{{ month.id }}/pdf?tipo=mensal">{{ ic('file') }} PDF mensal com as movimentações</a> <a class="btn btn-sm" href="/mes/{{ month.id }}/pdf?tipo=geral">{{ ic('trophy') }} PDF geral</a></div>
+  <form class="box" method="post" action="/mes/fechar" onsubmit="return confirm('Confirmar o fechamento do mês? As categorias serão atualizadas.')">
     <h2>Confirmar</h2>
     <button class="btn btn-gold btn-lg" {% if open_stage_exists %}disabled{% endif %}>{{ ic('check') }} Fechar o mês</button>
   </form>

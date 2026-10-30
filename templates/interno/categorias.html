@@ -6,26 +6,26 @@
 {% for m in mods %}
 <div class="box">
   <h2 style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">{{ m.m.label }} <span class="muted small" style="text-transform:none; letter-spacing:0">({{ m.m.code }})</span>
-    <form class="inline" method="post" action="/interno/modalidades/{{ m.m.code }}/renomear" onsubmit="var v=prompt('Novo nome:','{{ m.m.label }}'); if(!v) return false; this.label.value=v;"><input type="hidden" name="label"><button class="btn btn-sm" title="Renomear" aria-label="Renomear">{{ ic('edit') }}</button></form>
-    {% if not m.in_use %}<form class="inline" method="post" action="/interno/modalidades/{{ m.m.code }}/excluir" onsubmit="return confirm('Excluir a modalidade {{ m.m.label }}?')"><button class="btn btn-sm btn-danger" title="Excluir modalidade" aria-label="Excluir modalidade">{{ ic('trash') }}</button></form>{% endif %}
+    <form class="inline" method="post" action="/modalidades/{{ m.m.code }}/renomear" onsubmit="var v=prompt('Novo nome:','{{ m.m.label }}'); if(!v) return false; this.label.value=v;"><input type="hidden" name="label"><button class="btn btn-sm" title="Renomear" aria-label="Renomear">{{ ic('edit') }}</button></form>
+    {% if not m.in_use %}<form class="inline" method="post" action="/modalidades/{{ m.m.code }}/excluir" onsubmit="return confirm('Excluir a modalidade {{ m.m.label }}?')"><button class="btn btn-sm btn-danger" title="Excluir modalidade" aria-label="Excluir modalidade">{{ ic('trash') }}</button></form>{% endif %}
   </h2>
   {% for c in m.cats %}
-  <form method="post" action="/interno/categorias/{{ c.c.id }}/editar" class="item" style="flex-wrap:wrap; gap:8px; margin-bottom:8px">
+  <form method="post" action="/categorias/{{ c.c.id }}/editar" class="item" style="flex-wrap:wrap; gap:8px; margin-bottom:8px">
     <div style="flex:2; min-width:160px"><label>Nome{% if c.c.entry %} · <span style="color:var(--gold)">inicial</span>{% endif %}</label><input type="text" name="name" value="{{ c.c.name }}"></div>
     <div style="width:80px"><label>Limite</label><input type="number" name="max_shooters" value="{{ c.c.max_shooters or '' }}" placeholder="—" min="0"></div>
     <div style="width:80px"><label>Sobem</label><input type="number" name="promote_n" value="{{ c.c.promote_n }}" min="0"></div>
     <div style="width:80px"><label>Descem</label><input type="number" name="demote_n" value="{{ c.c.demote_n }}" min="0"></div>
     <div style="display:flex; gap:6px; align-items:flex-end; flex-wrap:wrap">
       <button class="btn btn-sm btn-gold" title="Salvar" aria-label="Salvar">{{ ic('save') }}</button>
-      <button class="btn btn-sm" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="up" title="Sobe na hierarquia">{{ ic('up') }}</button>
-      <button class="btn btn-sm" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="down" title="Desce na hierarquia">{{ ic('down') }}</button>
-      {% if not c.c.entry %}<button class="btn btn-sm" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="entry" title="Tornar inicial">{{ ic('flag') }}</button>{% endif %}
-      {% if not c.in_use %}<button class="btn btn-sm btn-danger" formaction="/interno/categorias/{{ c.c.id }}/acao" name="acao" value="delete" onclick="return confirm('Excluir categoria?')">{{ ic('trash') }}</button>{% endif %}
+      <button class="btn btn-sm" formaction="/categorias/{{ c.c.id }}/acao" name="acao" value="up" title="Sobe na hierarquia">{{ ic('up') }}</button>
+      <button class="btn btn-sm" formaction="/categorias/{{ c.c.id }}/acao" name="acao" value="down" title="Desce na hierarquia">{{ ic('down') }}</button>
+      {% if not c.c.entry %}<button class="btn btn-sm" formaction="/categorias/{{ c.c.id }}/acao" name="acao" value="entry" title="Tornar inicial">{{ ic('flag') }}</button>{% endif %}
+      {% if not c.in_use %}<button class="btn btn-sm btn-danger" formaction="/categorias/{{ c.c.id }}/acao" name="acao" value="delete" onclick="return confirm('Excluir categoria?')">{{ ic('trash') }}</button>{% endif %}
     </div>
     <div class="muted small" style="flex-basis:100%">{{ c.members }} atirador(es) atualmente · rank {{ c.c.rank }}</div>
   </form>
   {% endfor %}
-  <form method="post" action="/interno/categorias/nova" class="frow" style="margin-top:10px; border-top:1px dashed var(--line); padding-top:12px">
+  <form method="post" action="/categorias/nova" class="frow" style="margin-top:10px; border-top:1px dashed var(--line); padding-top:12px">
     <input type="hidden" name="modality" value="{{ m.m.code }}">
     <div><label>Nova categoria</label><input type="text" name="name" placeholder="Nome" required></div>
     <div style="max-width:100px"><label>Limite</label><input type="number" name="max_shooters" placeholder="—"></div>
@@ -35,7 +35,7 @@
   </form>
 </div>
 {% endfor %}
-<form class="box frow" method="post" action="/interno/modalidades/nova">
+<form class="box frow" method="post" action="/modalidades/nova">
   <div><label>Nova modalidade (tipo de arma)</label><input type="text" name="label" placeholder="Ex.: Carabina .22" required></div>
   <div><button class="btn btn-gold btn-block">{{ ic('plus') }} Criar modalidade</button></div>
 </form>
@@ -45,7 +45,7 @@
   <p class="muted small" style="margin:0 0 12px">Atiradores vinculados à categoria inicial de uma arma em que nunca tiveram inscrição no sistema. A maioria foi criada automaticamente ao abrir o atirador na linha de tiro (erro já corrigido) e infla a contagem de membros; alguns podem vir da importação da planilha antiga. Removê-los não altera resultados: na primeira passada real naquela arma, o atirador volta para a mesma categoria inicial. Um backup do banco é feito antes de cada remoção.</p>
   <table class="plain"><thead><tr><th>Arma</th><th>Categoria</th><th style="text-align:right">Sem uso</th><th></th></tr></thead><tbody>
   {% for o in orphans %}<tr><td>{{ o.label }}</td><td>{{ o.category }}</td><td class="num" style="text-align:right">{{ o.n }}</td>
-    <td style="text-align:right"><form class="inline" method="post" action="/interno/categorias/limpar-sem-uso"
+    <td style="text-align:right"><form class="inline" method="post" action="/categorias/limpar-sem-uso"
       onsubmit="return confirm('Remover {{ o.n }} cadastro(s) sem uso de {{ o.label }}?')"><input type="hidden" name="modality" value="{{ o.modality }}">
       <button class="btn btn-sm btn-danger">{{ ic('trash') }} Remover</button></form></td></tr>{% endfor %}
   </tbody></table>

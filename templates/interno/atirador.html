@@ -1,11 +1,11 @@
 {% extends "interno/_base.html" %}
 {% block title %}{{ sh.name }}{% endblock %}
 {% block content %}
-<a class="btn btn-ghost btn-sm" href="/interno/atiradores">{{ ic('chev-l') }} Atiradores</a>
+<a class="btn btn-ghost btn-sm" href="/atiradores">{{ ic('chev-l') }} Atiradores</a>
 <h1 class="pg" style="margin-top:12px">{{ sh.name }}</h1>
 <p class="lead">{{ n_enroll }} inscrição(ões) no histórico.</p>
 <div class="grid2">
-  <form class="box" method="post" action="/interno/atiradores/{{ sh.id }}/editar">
+  <form class="box" method="post" action="/atiradores/{{ sh.id }}/editar">
     <h2>Dados</h2>
     <div class="f"><label>Nome completo</label><input type="text" name="name" value="{{ sh.name }}" style="text-transform:uppercase" required></div>
     <div class="f"><label>CPF</label><input type="text" name="cpf" value="{{ fmt_cpf(sh.cpf) if sh.cpf else '' }}" inputmode="numeric"></div>
@@ -14,7 +14,7 @@
   <div class="box">
     <h2>Categorias</h2>
     {% for m in mods %}
-    <form method="post" action="/interno/atiradores/{{ sh.id }}/categoria" class="f">
+    <form method="post" action="/atiradores/{{ sh.id }}/categoria" class="f">
       <label>{{ m.label }} — atual: {{ m.category }}</label>
       {% if 'admin' in perms %}
       <div style="display:flex; gap:8px">
@@ -41,14 +41,14 @@
   {% else %}<div class="muted small">Nenhuma passada.</div>{% endif %}
 </div>
 <div class="grid2">
-  <form class="box" method="post" action="/interno/atiradores/{{ sh.id }}/mesclar" onsubmit="return confirm('Mesclar ESTE cadastro no destino? Este será apagado e o histórico vai para o destino.')">
+  <form class="box" method="post" action="/atiradores/{{ sh.id }}/mesclar" onsubmit="return confirm('Mesclar ESTE cadastro no destino? Este será apagado e o histórico vai para o destino.')">
     <h2>Mesclar (duplicado)</h2>
     <div class="f"><label>Buscar cadastro de destino (o que fica)</label><input type="search" id="mq" placeholder="Parte do nome" autocomplete="off"></div>
     <div id="mres" class="list" style="margin-bottom:10px"></div>
     <input type="hidden" name="dst_id" id="dst">
     <button class="btn" id="mbtn" disabled>{{ ic('link') }} Mesclar neste destino</button>
   </form>
-  <form class="box" method="post" action="/interno/atiradores/{{ sh.id }}/excluir" onsubmit="return confirm('EXCLUIR {{ sh.name }} e TODO o histórico dele? Não pode ser desfeito.')">
+  <form class="box" method="post" action="/atiradores/{{ sh.id }}/excluir" onsubmit="return confirm('EXCLUIR {{ sh.name }} e TODO o histórico dele? Não pode ser desfeito.')">
     <h2>Excluir</h2>
     <div class="muted small" style="margin-bottom:10px">Apaga o atirador, inscrições e resultados. Prefira mesclar se for duplicado.</div>
     <button class="btn btn-danger">{{ ic('trash') }} Excluir atirador</button>
@@ -59,7 +59,7 @@
 <script>
 var t=null; document.getElementById('mq').addEventListener('input', function(){ clearTimeout(t); var v=this.value; t=setTimeout(async function(){
   if(!v.trim()){ document.getElementById('mres').innerHTML=''; return; }
-  var rows = await (await fetch('/interno/api/atiradores/busca?q='+encodeURIComponent(v))).json();
+  var rows = await (await fetch('/api/atiradores/busca?q='+encodeURIComponent(v))).json();
   document.getElementById('mres').innerHTML = rows.filter(function(r){return r.id!={{ sh.id }};}).map(function(r){
     return '<div class="item" style="cursor:pointer" onclick="pick('+r.id+',this)"><div class="who"><div class="nm">'+r.name+'</div><div class="meta">'+(r.cpf||'sem CPF')+'</div></div></div>';
   }).join('') || '<div class="muted small">nada encontrado</div>';

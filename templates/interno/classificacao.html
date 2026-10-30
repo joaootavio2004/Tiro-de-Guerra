@@ -19,7 +19,7 @@
   {% else %}{% if open_stage %}<div class="box muted">Nenhum tempo lançado ainda.</div>{% endif %}{% endfor %}
 </section>
 <section id="tMes" class="hide">
-  <form method="get" action="/interno/classificacao" class="box" style="display:flex; gap:10px; align-items:center">
+  <form method="get" action="/classificacao" class="box" style="display:flex; gap:10px; align-items:center">
     <label style="margin:0">Mês</label>
     <select name="mes" onchange="this.form.submit()" style="max-width:240px">{% for m in months %}<option value="{{ m.id }}" {% if m.id == month.id %}selected{% endif %}>{{ month_pt[m.month] }} {{ m.year }}{% if m.status=='aberto' %} · aberto{% endif %}</option>{% endfor %}</select>
   </form>

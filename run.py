@@ -1,12 +1,10 @@
 """
-Ponto de entrada único.
+Ponto de entrada único: sobe o servidor web (FastAPI).
 
-Sobe o servidor web (FastAPI) e o bot do Telegram no mesmo processo.
-- O bot funciona por "polling" (não precisa configurar URL/HTTPS).
-- O site entra na próxima fase usando as mesmas funções de classificação.
-Tudo compartilha o mesmo banco SQLite (volume persistente).
+- Site público de resultados: tirodeguerra.com.br
+- Área interna: admin.tirodeguerra.com.br (ver app/hosts.py e ADMIN_HOST)
+Tudo usa o mesmo banco SQLite (volume persistente).
 """
-import asyncio
 import contextlib
 import logging
 import os
@@ -16,15 +14,12 @@ import uvicorn
 from fastapi import FastAPI
 
 from app import config, db
-from app.bot import build_application
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s | %(message)s",
 )
 log = logging.getLogger("main")
-
-application = build_application()  # bot do Telegram
 
 
 def seed_if_empty():
@@ -53,21 +48,9 @@ async def lifespan(app: FastAPI):
     if pw:
         log.warning("=== Área interna: usuário '%s' criado. Senha: %s ===",
                     config.ADMIN_USER, pw if not config.ADMIN_PASSWORD else "(a de ADMIN_PASSWORD)")
-    # inicia o bot
-    await application.initialize()
-    await application.start()
-    await application.updater.start_polling(drop_pending_updates=True)
-    log.info("Bot do Telegram iniciado (polling).")
-    try:
-        yield
-    finally:
-        log.info("Encerrando bot...")
-        with contextlib.suppress(Exception):
-            await application.updater.stop()
-        with contextlib.suppress(Exception):
-            await application.stop()
-        with contextlib.suppress(Exception):
-            await application.shutdown()
+    if config.ADMIN_HOST:
+        log.info("Área interna em %s", config.ADMIN_HOST)
+    yield
 
 
 web = FastAPI(title=f"{config.CLUB_NAME} — Resultados", lifespan=lifespan)
@@ -76,12 +59,19 @@ web = FastAPI(title=f"{config.CLUB_NAME} — Resultados", lifespan=lifespan)
 from app.website import register_web  # noqa: E402
 register_web(web)
 
-# Área interna (/interno): login, linha de tiro, inscrições, administração
+# Área interna: login, linha de tiro, inscrições, administração
 from app.interno import router as interno_router  # noqa: E402
 from app.interno_admin import router as interno_admin_router  # noqa: E402
 web.include_router(interno_router)
 web.include_router(interno_admin_router)
 
+# Subdomínio da área interna (admin.*) -> rotas /interno
+from app.hosts import AdminHostMiddleware  # noqa: E402
+web.add_middleware(AdminHostMiddleware, admin_host=config.ADMIN_HOST)
+
 
 if __name__ == "__main__":
-    uvicorn.run(web, host="0.0.0.0", port=config.WEB_PORT)
+    # atrás do proxy do Coolify: confia no X-Forwarded-Proto para saber que é
+    # HTTPS (cookie de sessão com "secure" e redirecionamentos corretos)
+    uvicorn.run(web, host="0.0.0.0", port=config.WEB_PORT,
+                proxy_headers=True, forwarded_allow_ips="*")

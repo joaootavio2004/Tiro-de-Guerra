@@ -1,16 +1,16 @@
-# Para o Coolify: crie um recurso do tipo "Docker Compose" apontando para
-# este repositório. Defina as variáveis BOT_TOKEN e ADMIN_IDS no painel.
+# Para o Coolify: recurso do tipo "Docker Compose" apontando para este
+# repositório. No serviço "app", configure os dois domínios:
+#   https://tirodeguerra.com.br,https://admin.tirodeguerra.com.br  (porta 8000)
 services:
   app:
     build: .
     restart: unless-stopped
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - ADMIN_IDS=${ADMIN_IDS}
       - CLUB_NAME=${CLUB_NAME:-GUERRA Clube de Tiro}
       - ADMIN_USER=${ADMIN_USER:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - SITE_URL=${SITE_URL:-https://tirodeguerra.com.br}
+      - ADMIN_HOST=${ADMIN_HOST:-admin.tirodeguerra.com.br}
       - TZ=${TZ:-America/Sao_Paulo}
       - PORT=8000
       - DB_PATH=/app/data/tiro_guerra.db

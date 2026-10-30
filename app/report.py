@@ -1,5 +1,5 @@
 """
-Gera os PDFs enviados pelo bot no Telegram, com o design do site:
+Gera os PDFs de resultados (baixados na área interna), com o design do site:
 - Resultado MENSAL (fechamento do mês): tempo + pontos por etapa e total,
   com setas de subida/descida.
 - Resultado da ETAPA (fechamento da etapa): tempo, penalidades, tempo final

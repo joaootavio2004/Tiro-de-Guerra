@@ -14,7 +14,7 @@
       <div class="meta">{{ r.created_at[11:16] }} · {% if r.dq %}desqualificado{% else %}pista {{ '%.2f'|format(r.raw) }}s{% if r.pen_secs %} + {{ r.pen_secs }}s pen.{% endif %}{% endif %}{% if r.n_shots %} · {{ r.n_shots }} disparos{% endif %}{% if r.source == 'timer' %} · timer{% endif %}</div>
     </div>
     <button class="btn btn-sm" onclick='printRun({{ r|tojson }}, {{ row.shooter.name|tojson }}, this)'>{{ ic('print') }}</button>
-    <form method="post" action="/interno/lancamentos/apagar" onsubmit="return confirm('Apagar esta passada?')"><input type="hidden" name="run_id" value="{{ r.id }}"><button class="btn btn-sm btn-danger">Apagar</button></form>
+    <form method="post" action="/lancamentos/apagar" onsubmit="return confirm('Apagar esta passada?')"><input type="hidden" name="run_id" value="{{ r.id }}"><button class="btn btn-sm btn-danger">Apagar</button></form>
   </div>
   {% endfor %}
 </div>

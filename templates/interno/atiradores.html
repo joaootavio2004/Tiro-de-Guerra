@@ -6,9 +6,9 @@
 <div class="grid2">
   <div class="box">
     <h2>Buscar</h2>
-    <form method="get" action="/interno/atiradores"><div class="search"><input type="search" name="q" value="{{ q }}" placeholder="Parte do nome" autocomplete="off"></div></form>
+    <form method="get" action="/atiradores"><div class="search"><input type="search" name="q" value="{{ q }}" placeholder="Parte do nome" autocomplete="off"></div></form>
   </div>
-  <form class="box" method="post" action="/interno/atiradores/novo">
+  <form class="box" method="post" action="/atiradores/novo">
     <h2>Novo atirador</h2>
     <div class="frow">
       <div><label>Nome completo</label><input type="text" name="name" style="text-transform:uppercase" required></div>
@@ -21,7 +21,7 @@
 <div class="box warn">
   <h2>Possíveis duplicados</h2>
   {% for g in dups %}
-  <div class="small" style="margin-bottom:6px">{% for s in g %}<a href="/interno/atiradores/{{ s.id }}">{{ s.name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  <div class="small" style="margin-bottom:6px">{% for s in g %}<a href="/atiradores/{{ s.id }}">{{ s.name }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</div>
   {% endfor %}
   <div class="muted small">Abra um deles e use "Mesclar" para juntar os históricos.</div>
 </div>
@@ -30,7 +30,7 @@
   <h2>{{ total }} atirador{{ 'es' if total != 1 }}{% if q %} para "{{ q }}"{% endif %}</h2>
   <div class="list">
     {% for s in rows %}
-    <a class="item" href="/interno/atiradores/{{ s.id }}" style="text-decoration:none">
+    <a class="item" href="/atiradores/{{ s.id }}" style="text-decoration:none">
       <div class="who"><div class="nm">{{ s.name }}</div><div class="meta">{{ fmt_cpf(s.cpf) if s.cpf else 'sem CPF' }}</div></div><span class="go">{{ ic('chev-r') }}</span>
     </a>
     {% endfor %}

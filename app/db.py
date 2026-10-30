@@ -13,7 +13,6 @@ from typing import Optional, List, Dict, Any
 from . import config
 from . import util
 
-MODALITIES = ("pistola", "carabina")
 
 # Modalidades (tipos) padrão: (code, label, sort)
 DEFAULT_MODALITIES = [
@@ -32,9 +31,9 @@ DEFAULT_CATEGORIES = [
 
 # Permissões existentes no sistema: (código, rótulo)
 PERMISSIONS = [
-    ("inscrever", "📝 Inscrever / editar inscrições"),
-    ("resultados", "🎯 Lançar e consultar resultados"),
-    ("atiradores", "👤 Gerenciar atiradores"),
+    ("inscrever", "Inscrever / editar inscrições"),
+    ("resultados", "Lançar e consultar resultados"),
+    ("atiradores", "Gerenciar atiradores"),
 ]
 
 # Cargos padrão: (code, label, builtin, permissões iniciais)
@@ -45,23 +44,9 @@ DEFAULT_ROLES = [
     ("recepcao", "Recepção", 1, ["inscrever", "atiradores"]),
 ]
 
+# As tabelas "staff" e "access_requests" do antigo bot do Telegram podem
+# existir em bancos antigos; não são mais criadas nem usadas.
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS staff (
-    telegram_id INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL,
-    username    TEXT,
-    role        TEXT NOT NULL,                 -- 'admin' | 'ro' | 'recepcao'
-    status      TEXT NOT NULL DEFAULT 'ativo', -- 'ativo' | 'inativo'
-    created_at  TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS access_requests (
-    telegram_id INTEGER PRIMARY KEY,
-    name        TEXT NOT NULL,
-    username    TEXT,
-    created_at  TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS categories (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     name         TEXT NOT NULL,
@@ -299,7 +284,7 @@ def init_db() -> None:
         conn.commit()
         ensure_current_month(conn)
         conn.commit()
-        # --- área interna (/interno): tabelas e colunas novas, só aditivas ---
+        # --- área interna: tabelas e colunas novas, só aditivas ---
         from . import webdb
         webdb.migrate(conn)
         # atualiza os rótulos em cache (modalidades e cargos)
@@ -310,73 +295,6 @@ def init_db() -> None:
                                conn.execute("SELECT * FROM roles")})
     finally:
         conn.close()
-
-
-# ----------------------------------------------------------------------------
-# EQUIPE / ACESSO
-# ----------------------------------------------------------------------------
-def get_staff(conn, telegram_id: int) -> Optional[sqlite3.Row]:
-    return conn.execute(
-        "SELECT * FROM staff WHERE telegram_id=? AND status='ativo'",
-        (telegram_id,)).fetchone()
-
-
-def upsert_staff(conn, telegram_id: int, name: str, role: str,
-                 username: str = None) -> None:
-    conn.execute(
-        "INSERT INTO staff(telegram_id,name,username,role,status,created_at) "
-        "VALUES (?,?,?,?, 'ativo', ?) "
-        "ON CONFLICT(telegram_id) DO UPDATE SET name=excluded.name, "
-        "username=excluded.username, role=excluded.role, status='ativo'",
-        (telegram_id, name, username, role, now()))
-
-
-def list_staff(conn) -> List[sqlite3.Row]:
-    return conn.execute(
-        "SELECT * FROM staff WHERE status='ativo' ORDER BY role, name").fetchall()
-
-
-def deactivate_staff(conn, telegram_id: int) -> None:
-    conn.execute("UPDATE staff SET status='inativo' WHERE telegram_id=?",
-                 (telegram_id,))
-
-
-def add_access_request(conn, telegram_id: int, name: str, username: str) -> None:
-    conn.execute(
-        "INSERT OR REPLACE INTO access_requests(telegram_id,name,username,created_at) "
-        "VALUES (?,?,?,?)", (telegram_id, name, username, now()))
-
-
-def get_access_request(conn, telegram_id: int) -> Optional[sqlite3.Row]:
-    return conn.execute("SELECT * FROM access_requests WHERE telegram_id=?",
-                        (telegram_id,)).fetchone()
-
-
-def remove_access_request(conn, telegram_id: int) -> None:
-    conn.execute("DELETE FROM access_requests WHERE telegram_id=?", (telegram_id,))
-
-
-def list_admin_ids(conn) -> List[int]:
-    rows = conn.execute(
-        "SELECT telegram_id FROM staff WHERE role='admin' AND status='ativo'"
-    ).fetchall()
-    ids = {r["telegram_id"] for r in rows} | set(config.ADMIN_IDS)
-    return list(ids)
-
-
-def rename_staff(conn, telegram_id: int, name: str) -> None:
-    conn.execute("UPDATE staff SET name=? WHERE telegram_id=?",
-                 (name.strip(), telegram_id))
-
-
-def set_staff_role(conn, telegram_id: int, role_code: str) -> None:
-    conn.execute("UPDATE staff SET role=? WHERE telegram_id=?",
-                 (role_code, telegram_id))
-
-
-def get_staff_any(conn, telegram_id: int) -> Optional[sqlite3.Row]:
-    return conn.execute("SELECT * FROM staff WHERE telegram_id=?",
-                        (telegram_id,)).fetchone()
 
 
 # ----------------------------------------------------------------------------
@@ -405,14 +323,12 @@ def add_role(conn, label: str) -> str:
     return code
 
 
-def rename_role(conn, code: str, label: str) -> None:
-    conn.execute("UPDATE roles SET label=? WHERE code=?", (label.strip(), code))
-
-
-def role_member_count(conn, code: str) -> int:
-    return conn.execute(
-        "SELECT COUNT(*) AS n FROM staff WHERE role=? AND status='ativo'",
-        (code,)).fetchone()["n"]
+def role_member_count(conn, code: str, only_active: bool = True) -> int:
+    """Logins da área interna com este cargo."""
+    sql = "SELECT COUNT(*) AS n FROM web_users WHERE role=?"
+    if only_active:
+        sql += " AND active=1"
+    return conn.execute(sql, (code,)).fetchone()["n"]
 
 
 def delete_role(conn, code: str) -> None:
@@ -844,13 +760,6 @@ def stage_result_count(conn, stage_id: int) -> int:
     return row["n"]
 
 
-def stage_enroll_count(conn, stage_id: int) -> int:
-    row = conn.execute(
-        "SELECT COUNT(*) AS n FROM enrollments WHERE stage_id=?",
-        (stage_id,)).fetchone()
-    return row["n"]
-
-
 def delete_stage(conn, stage_id: int) -> None:
     """Apaga a etapa e tudo ligado a ela (inscrições e resultados)."""
     conn.execute(
@@ -936,33 +845,6 @@ def enroll(conn, stage_id: int, shooter_id: int, modality: str,
                         (cur.lastrowid,)).fetchone()
 
 
-def list_enrollments(conn, stage_id: int, modality: str = None) -> List[sqlite3.Row]:
-    q = ("SELECT e.*, s.name AS shooter_name, c.name AS category_name, c.rank AS rank "
-         "FROM enrollments e "
-         "JOIN shooters s ON s.id=e.shooter_id "
-         "JOIN categories c ON c.id=e.category_id "
-         "WHERE e.stage_id=? ")
-    args: list = [stage_id]
-    if modality:
-        q += "AND e.modality=? "
-        args.append(modality)
-    q += "ORDER BY e.modality, c.rank DESC, s.name"
-    return conn.execute(q, args).fetchall()
-
-
-def get_enrollment_full(conn, enrollment_id: int):
-    return conn.execute(
-        "SELECT e.*, s.name AS shooter_name, c.name AS category_name "
-        "FROM enrollments e JOIN shooters s ON s.id=e.shooter_id "
-        "JOIN categories c ON c.id=e.category_id WHERE e.id=?",
-        (enrollment_id,)).fetchone()
-
-
-def set_enrollment_qty(conn, enrollment_id: int, qty: int) -> None:
-    conn.execute("UPDATE enrollments SET runs_total=? WHERE id=?",
-                 (max(1, qty), enrollment_id))
-
-
 def delete_enrollment(conn, enrollment_id: int) -> None:
     """Remove a inscrição e os resultados ligados a ela."""
     conn.execute("DELETE FROM runs WHERE enrollment_id=?", (enrollment_id,))
@@ -1003,12 +885,6 @@ def any_dq(conn, enrollment_id: int) -> bool:
     return r["n"] > 0
 
 
-def list_runs(conn, enrollment_id: int) -> List[sqlite3.Row]:
-    return conn.execute(
-        "SELECT * FROM runs WHERE enrollment_id=? ORDER BY id",
-        (enrollment_id,)).fetchall()
-
-
 def get_run(conn, run_id: int) -> Optional[sqlite3.Row]:
     return conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
 
@@ -1025,17 +901,6 @@ def delete_run(conn, run_id: int) -> Optional[sqlite3.Row]:
 def get_enrollment_by_id(conn, enrollment_id: int) -> Optional[sqlite3.Row]:
     return conn.execute("SELECT * FROM enrollments WHERE id=?",
                         (enrollment_id,)).fetchone()
-
-
-def stage_shooters_with_runs(conn, stage_id: int) -> List[sqlite3.Row]:
-    """Atiradores que já têm ao menos uma passada lançada na etapa."""
-    return conn.execute(
-        "SELECT s.id, s.name, COUNT(r.id) AS n_runs "
-        "FROM shooters s "
-        "JOIN enrollments e ON e.shooter_id=s.id "
-        "JOIN runs r ON r.enrollment_id=e.id "
-        "WHERE e.stage_id=? GROUP BY s.id, s.name ORDER BY s.name",
-        (stage_id,)).fetchall()
 
 
 def shooter_stage_enrollments(conn, stage_id: int,

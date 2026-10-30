@@ -54,7 +54,7 @@ var tT=null; function toast(s,e){var m=$('toast');m.textContent=s;m.className='t
 function tab(b){ document.querySelectorAll('.sub-tabs button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on');
   ['tabPres','tabBill'].forEach(function(id){ $(id).classList.toggle('hide', id!==b.dataset.t); }); if(b.dataset.t==='tabBill') renderBill(); }
 async function api(url, body){ var r=await fetch(url, body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});
-  if(r.status===401){location.href='/interno/login?next=/interno/inscricoes';throw new Error('login');}
+  if(r.status===401){location.href='/login?next=/inscricoes';throw new Error('login');}
   var d=await r.json().catch(function(){return {};}); if(!r.ok) throw new Error(d.detail||('erro '+r.status)); return d; }
 
 /* --------- máscara e conferência do CPF (no navegador, pra errar menos) --------- */
@@ -86,7 +86,7 @@ async function search(v){
   var term=(v||'').trim();
   if(!term){ $('res').innerHTML=''; return; }
   try{
-    var rows = await api('/interno/api/atiradores/busca?q='+encodeURIComponent(term));
+    var rows = await api('/api/atiradores/busca?q='+encodeURIComponent(term));
     var h = rows.map(function(r){
       var right = r.checked_in ? '<span class="tag ok">presente</span>'
         : '<button class="btn btn-sm btn-gold" onclick="pick('+r.id+')">Marcar presença</button>';
@@ -107,7 +107,7 @@ async function search(v){
 /* --------- marcar presença (pede CPF se faltar) --------- */
 async function pick(id){
   try{
-    var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id});
+    var d = await api('/api/inscricoes/checkin', {shooter_id:id});
     if(d.need_cpf){ askCPF(id, d.name); return; }
     PARTS=d.participants; renderList(); toast('Presença marcada'); search($('q').value);
   }catch(e){ toast(e.message, true); }
@@ -128,13 +128,13 @@ async function saveCPF(id){
   var v=$('cpfin'+id).value;
   if(!validCPF(v)){ toast('CPF inválido — confira os números.', true); return; }
   try{
-    var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id, cpf:v});
+    var d = await api('/api/inscricoes/checkin', {shooter_id:id, cpf:v});
     if(d.need_cpf){ toast('CPF não foi aceito.', true); return; }
     PARTS=d.participants; renderList(); toast('CPF salvo e presença marcada'); search($('q').value);
   }catch(e){ toast(e.message, true); }
 }
 async function removeP(id){
-  try{ var d = await api('/interno/api/inscricoes/checkin', {shooter_id:id, remove:true});
+  try{ var d = await api('/api/inscricoes/checkin', {shooter_id:id, remove:true});
     PARTS=d.participants; renderList(); toast('Removido.'); search($('q').value); }
   catch(e){ toast(e.message, true); }
 }
@@ -157,14 +157,14 @@ async function createShooter(force){
   if(name.length<3){ toast('Nome muito curto.', true); return; }
   if(!validCPF(cpf)){ toast('CPF inválido — confira os números.', true); return; }
   try{
-    var d = await api('/interno/api/atiradores/novo', {name:name, cpf:cpf, checkin:true, force:force});
+    var d = await api('/api/atiradores/novo', {name:name, cpf:cpf, checkin:true, force:force});
     if(!d.ok && d.duplicate){
       if(confirm('Já existe "'+d.duplicate.name+'" com esse nome. Marcar presença dele?')){ pick(d.duplicate.id); return; }
       if(!confirm('Cadastrar mesmo assim como pessoa diferente?')) return;
       return createShooter(true);
     }
     $('q').value=''; $('res').innerHTML='';
-    var p = await api('/interno/api/linha/dados').catch(function(){return null;});
+    var p = await api('/api/linha/dados').catch(function(){return null;});
     if(p && p.participants) PARTS=p.participants; else PARTS.push({id:d.id,name:d.name,runs:0,by_modality:{}});
     renderList(); toast(d.name+' cadastrado e presente');
   }catch(e){ toast(e.message, true); }
@@ -172,7 +172,7 @@ async function createShooter(force){
 
 /* --------- cobrança --------- */
 async function renderBill(){
-  try{ var rows = await api('/interno/api/inscricoes/cobranca');
+  try{ var rows = await api('/api/inscricoes/cobranca');
     $('bill').querySelector('tbody').innerHTML = rows.map(function(p){
       return '<tr><td>'+esc(p.name)+'</td>'+MODS.map(function(m){ return '<td class="num" style="text-align:center">'+(p.by_modality[m.code]||0)+'</td>'; }).join('')+
         '<td class="num" style="text-align:center"><b>'+p.runs+'</b></td></tr>';
@@ -181,6 +181,6 @@ async function renderBill(){
 }
 renderList();
 setInterval(function(){ if(!$('tabBill').classList.contains('hide')) renderBill();
-  else if(!$('q').value.trim()) api('/interno/api/linha/dados').then(function(p){ if(p.participants){PARTS=p.participants; renderList();} }).catch(function(){}); }, 20000);
+  else if(!$('q').value.trim()) api('/api/linha/dados').then(function(p){ if(p.participants){PARTS=p.participants; renderList();} }).catch(function(){}); }, 20000);
 </script>
 {% endblock %}

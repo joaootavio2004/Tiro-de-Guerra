@@ -34,12 +34,6 @@ def final_time(raw_time: Optional[float], pen2: int = 0, pen5: int = 0,
     return float(raw_time) + 2 * int(pen2) + 5 * int(pen5) + 10 * int(pen10)
 
 
-def best_time(run_final_times: List[Optional[float]]) -> Optional[float]:
-    """Melhor (menor) tempo final entre as corridas de um atirador numa etapa."""
-    valid = [t for t in run_final_times if t is not None and t > 0]
-    return min(valid) if valid else None
-
-
 def stage_points(times_by_shooter: Dict[int, Optional[float]]) -> Dict[int, float]:
     """
     Recebe {shooter_id: melhor_tempo_final ou None} de UMA categoria numa etapa.

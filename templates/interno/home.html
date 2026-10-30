@@ -4,7 +4,7 @@
 <h1 class="pg">Olá, {{ user.name.split(' ')[0] }}</h1>
 <p class="lead">
   {% if open_stage %}Etapa aberta: <b>{{ open_stage_label }}</b> · {{ fmt_date(open_stage.date) }}
-  {% else %}Não há etapa aberta no momento{% if 'admin' in perms %}. Abra uma em <a href="/interno/etapas">Etapas</a>{% endif %}.{% endif %}
+  {% else %}Não há etapa aberta no momento{% if 'admin' in perms %}. Abra uma em <a href="/etapas">Etapas</a>{% endif %}.{% endif %}
 </p>
 {% if cards %}
 <div class="cards">

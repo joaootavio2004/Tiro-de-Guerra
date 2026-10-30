@@ -1,12 +1,12 @@
 """
-Área interna do site — tirodeguerra.com.br/interno
+Área interna — admin.tirodeguerra.com.br (rotas registradas sob /interno;
+app/hosts.py mapeia o subdomínio para elas e gera links sem o prefixo).
 
-Reúne tudo que o bot faz, em páginas, com foco em automatizar a linha de
-tiro (timer Special Pie por Bluetooth + impressora térmica). Usa o MESMO
-banco e as MESMAS regras (standings/scoring/report) do bot — os dois
-convivem.
+Operação do clube em páginas, com foco em automatizar a linha de tiro
+(timer Special Pie por Bluetooth + impressora térmica). Usa as mesmas regras
+(standings/scoring/report) do site público.
 
-Cargos e permissões vêm da tabela `roles` (as mesmas do bot):
+Cargos e permissões vêm da tabela `roles`:
   inscrever   -> inscrições da etapa e lista de passadas (cobrança)
   resultados  -> linha de tiro e lançamentos
   atiradores  -> cadastro/edição de atiradores
@@ -40,15 +40,15 @@ templates.env.globals["ic"] = _icon
 
 NAV = [
     # (perm, href, label, ícone em static/icons.svg, grupo na barra lateral)
-    ("resultados", "/interno/linha", "Linha de tiro", "k-target", "Operação"),
-    ("resultados", "/interno/lancamentos", "Lançamentos", "list", "Operação"),
-    ("inscrever", "/interno/inscricoes", "Inscrições", "k-dogtag", "Operação"),
-    ("atiradores", "/interno/atiradores", "Atiradores", "k-soldier", "Cadastro"),
-    (None, "/interno/classificacao", "Classificação", "k-medal", "Cadastro"),
-    ("admin", "/interno/indicadores", "Indicadores", "chart", "Administração"),
-    ("admin", "/interno/etapas", "Etapas", "calendar", "Administração"),
-    ("admin", "/interno/categorias", "Categorias", "k-rank", "Administração"),
-    ("admin", "/interno/usuarios", "Usuários", "users", "Administração"),
+    ("resultados", "/linha", "Linha de tiro", "k-target", "Operação"),
+    ("resultados", "/lancamentos", "Lançamentos", "list", "Operação"),
+    ("inscrever", "/inscricoes", "Inscrições", "k-dogtag", "Operação"),
+    ("atiradores", "/atiradores", "Atiradores", "k-soldier", "Cadastro"),
+    (None, "/classificacao", "Classificação", "k-medal", "Cadastro"),
+    ("admin", "/indicadores", "Indicadores", "chart", "Administração"),
+    ("admin", "/etapas", "Etapas", "calendar", "Administração"),
+    ("admin", "/categorias", "Categorias", "k-rank", "Administração"),
+    ("admin", "/usuarios", "Usuários", "users", "Administração"),
 ]
 
 
@@ -67,6 +67,15 @@ def perms_of(conn, user) -> set:
     return db.role_perms(conn, user["role"])
 
 
+def public_path(request: Request) -> str:
+    """Caminho como o usuário vê (sem o /interno interno do roteador)."""
+    p = getattr(request.state, "public_path", None)
+    if p is not None:
+        return p
+    path = request.url.path
+    return path[len("/interno"):] or "/" if path.startswith("/interno") else path
+
+
 def need(request: Request, conn, perm: Optional[str] = None):
     """Devolve (user, perms) ou interrompe com redirect (página) / 401 (API)."""
     user = current_user(request, conn)
@@ -75,12 +84,12 @@ def need(request: Request, conn, perm: Optional[str] = None):
         if is_api:
             raise HTTPException(401, "não autenticado")
         raise HTTPException(303, headers={
-            "Location": "/interno/login?next=" + quote(str(request.url.path))})
+            "Location": "/login?next=" + quote(public_path(request))})
     perms = perms_of(conn, user)
     if perm and perm not in perms:
         if is_api:
             raise HTTPException(403, "sem permissão")
-        raise HTTPException(303, headers={"Location": "/interno?msg=sem+permiss%C3%A3o"})
+        raise HTTPException(303, headers={"Location": "/?msg=sem+permiss%C3%A3o"})
     return user, perms
 
 
@@ -92,7 +101,7 @@ def render(request, conn, template, user, perms, **ctx):
         "user": user,
         "perms": perms,
         "nav": [n for n in NAV if n[0] is None or n[0] in perms],
-        "path": request.url.path,
+        "path": public_path(request),
         "open_stage": stage,
         "open_stage_label": stage_label(conn, stage) if stage else None,
         "open_month_label": f"{MONTH_PT[month['month']]} {month['year']}" if month else "",
@@ -121,27 +130,28 @@ async def login_page(request: Request):
     conn = db.get_conn()
     try:
         if current_user(request, conn):
-            return RedirectResponse("/interno", status_code=303)
+            return RedirectResponse("/", status_code=303)
     finally:
         conn.close()
     return templates.TemplateResponse(request, "interno/login.html", {
         "club": config.CLUB_NAME, "error": request.query_params.get("e", ""),
-        "next": request.query_params.get("next", "/interno")})
+        "next": request.query_params.get("next", "/")})
 
 
 @router.post("/login")
 async def login_post(request: Request, username: str = Form(""),
-                     password: str = Form(""), next: str = Form("/interno")):
+                     password: str = Form(""), next: str = Form("/")):
     conn = db.get_conn()
     try:
         u = webdb.get_user_by_username(conn, username)
         if not u or not u["active"] or not webdb.check_password(password, u["password_hash"]):
-            return RedirectResponse("/interno/login?e=1", status_code=303)
+            return RedirectResponse("/login?e=1", status_code=303)
         token = webdb.create_session(conn, u["id"])
         conn.commit()
     finally:
         conn.close()
-    dest = next if next.startswith("/interno") else "/interno"
+    # só caminho local: "//outro-site" e "/\outro" seriam redirecionamento externo
+    dest = next if next.startswith("/") and not next.startswith(("//", "/\\")) else "/"
     resp = RedirectResponse(dest, status_code=303)
     resp.set_cookie(COOKIE, token, max_age=webdb.SESSION_DAYS * 86400,
                     httponly=True, samesite="lax", secure=request.url.scheme == "https")
@@ -156,7 +166,7 @@ async def logout(request: Request):
         conn.commit()
     finally:
         conn.close()
-    resp = RedirectResponse("/interno/login", status_code=303)
+    resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(COOKIE)
     return resp
 
@@ -218,7 +228,7 @@ async def api_linha_dados(request: Request):
 
 
 def _resolve_category(conn, stage, shooter_id: int, modality: str, persist: bool = True):
-    """Mesma regra do bot: categoria atual do atirador (ou a inicial da
+    """Categoria atual do atirador (ou a inicial da
     modalidade), congelada no mês.
     persist=False só consulta: não cadastra o atirador na modalidade nem cria
     o snapshot do mês (usado ao abrir o atirador na linha, antes de existir
@@ -358,7 +368,7 @@ async def lancamentos_apagar(request: Request, run_id: int = Form(...)):
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/lancamentos", "Passada apagada.")
+    return back("/lancamentos", "Passada apagada.")
 
 
 # ============================================================================
@@ -509,14 +519,14 @@ async def atiradores_novo(request: Request, name: str = Form(""), cpf: str = For
     try:
         need(request, conn, "atiradores")
         if len(name.strip()) < 3:
-            return back("/interno/atiradores", "Nome muito curto.")
+            return back("/atiradores", "Nome muito curto.")
         if cpf.strip() and not util.valid_cpf(cpf):
-            return back("/interno/atiradores", "CPF inválido.")
+            return back("/atiradores", "CPF inválido.")
         sid = db.create_shooter(conn, name, cpf.strip() or None)
         conn.commit()
     finally:
         conn.close()
-    return back(f"/interno/atiradores/{sid}", "Atirador cadastrado.")
+    return back(f"/atiradores/{sid}", "Atirador cadastrado.")
 
 
 @router.get("/atiradores/{sid}", response_class=HTMLResponse)
@@ -526,7 +536,7 @@ async def atirador_detail(request: Request, sid: int):
         user, perms = need(request, conn, "atiradores")
         sh = db.get_shooter(conn, sid)
         if not sh:
-            return back("/interno/atiradores", "Atirador não encontrado.")
+            return back("/atiradores", "Atirador não encontrado.")
         mods = []
         for m in db.list_modalities(conn):
             cid = db.get_shooter_category(conn, sid, m["code"])
@@ -550,17 +560,17 @@ async def atirador_editar(request: Request, sid: int, name: str = Form(""),
     try:
         need(request, conn, "atiradores")
         if len(name.strip()) < 3:
-            return back(f"/interno/atiradores/{sid}", "Nome muito curto.")
+            return back(f"/atiradores/{sid}", "Nome muito curto.")
         if cpf.strip() and not util.valid_cpf(cpf):
-            return back(f"/interno/atiradores/{sid}", "CPF inválido.")
+            return back(f"/atiradores/{sid}", "CPF inválido.")
         other = db.get_shooter_by_cpf(conn, cpf) if cpf.strip() else None
         if other and other["id"] != sid:
-            return back(f"/interno/atiradores/{sid}", "CPF já usado por outro atirador.")
+            return back(f"/atiradores/{sid}", "CPF já usado por outro atirador.")
         db.update_shooter(conn, sid, name=name, cpf=cpf.strip())
         conn.commit()
     finally:
         conn.close()
-    return back(f"/interno/atiradores/{sid}", "Dados salvos.")
+    return back(f"/atiradores/{sid}", "Dados salvos.")
 
 
 @router.post("/atiradores/{sid}/categoria")
@@ -573,7 +583,7 @@ async def atirador_categoria(request: Request, sid: int, modality: str = Form(..
         conn.commit()
     finally:
         conn.close()
-    return back(f"/interno/atiradores/{sid}",
+    return back(f"/atiradores/{sid}",
                 f"Categoria alterada ({moved} inscrição(ões) do mês aberto movida(s)).")
 
 
@@ -583,12 +593,12 @@ async def atirador_mesclar(request: Request, sid: int, dst_id: int = Form(...)):
     try:
         need(request, conn, "atiradores")
         if not db.get_shooter(conn, dst_id) or dst_id == sid:
-            return back(f"/interno/atiradores/{sid}", "Destino inválido.")
+            return back(f"/atiradores/{sid}", "Destino inválido.")
         db.merge_shooters(conn, sid, dst_id)
         conn.commit()
     finally:
         conn.close()
-    return back(f"/interno/atiradores/{dst_id}", "Cadastros mesclados.")
+    return back(f"/atiradores/{dst_id}", "Cadastros mesclados.")
 
 
 @router.post("/atiradores/{sid}/excluir")
@@ -600,7 +610,7 @@ async def atirador_excluir(request: Request, sid: int):
         conn.commit()
     finally:
         conn.close()
-    return back("/interno/atiradores", "Atirador excluído.")
+    return back("/atiradores", "Atirador excluído.")
 
 
 # ============================================================================

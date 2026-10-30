@@ -12,12 +12,12 @@
 </head>
 <body>
 <aside class="side" id="side">
-  <a class="brand" href="/interno">
+  <a class="brand" href="/">
     <img src="/static/logo.png" alt="">
     <span class="name">Guerra<small>Área interna</small></span>
   </a>
   <nav>
-    <a href="/interno" class="{% if path in ('/interno','/interno/') %}on{% endif %}">{{ ic('home') }} Início</a>
+    <a href="/" class="{% if path == '/' %}on{% endif %}">{{ ic('home') }} Início</a>
     {% for n in nav %}
     {% if loop.first or n[4] != loop.previtem[4] %}<div class="grp">{{ n[4] }}</div>{% endif %}
     <a href="{{ n[1] }}" class="{% if path.startswith(n[1]) %}on{% endif %}">{{ ic(n[3]) }} {{ n[2] }}</a>
@@ -26,7 +26,7 @@
   <div class="foot">
     <span class="avatar">{{ (user.name or user.username)[:1]|upper }}</span>
     <div class="u"><b>{{ user.name or user.username }}</b><span>{{ role_label(user.role) }}</span></div>
-    <form method="post" action="/interno/logout"><button class="iconbtn" title="Sair" aria-label="Sair">{{ ic('logout') }}</button></form>
+    <form method="post" action="/logout"><button class="iconbtn" title="Sair" aria-label="Sair">{{ ic('logout') }}</button></form>
   </div>
 </aside>
 <div class="scrim" onclick="document.body.classList.remove('nav-open')"></div>
@@ -34,13 +34,13 @@
 <div class="shell">
   <header class="top">
     <button class="iconbtn burger" aria-label="Menu" onclick="document.body.classList.toggle('nav-open')">{{ ic('menu') }}</button>
-    <a class="mini-brand" href="/interno"><img src="/static/logo.png" alt="{{ club }}"></a>
+    <a class="mini-brand" href="/"><img src="/static/logo.png" alt="{{ club }}"></a>
     <div class="crumb">Área interna &nbsp;/&nbsp; <b>{{ self.title() }}</b></div>
     <span class="spacer"></span>
     {% if open_stage %}
-    <a class="stage-chip" href="/interno/classificacao"><span class="dot on"></span><span><span class="pfx">Etapa aberta: </span><b>{{ open_stage_label }}</b></span></a>
+    <a class="stage-chip" href="/classificacao"><span class="dot on"></span><span><span class="pfx">Etapa aberta: </span><b>{{ open_stage_label }}</b></span></a>
     {% else %}
-    <a class="stage-chip" href="{{ '/interno/etapas' if 'admin' in perms else '/interno' }}"><span class="dot"></span><span>Nenhuma etapa aberta</span></a>
+    <a class="stage-chip" href="{{ '/etapas' if 'admin' in perms else '/' }}"><span class="dot"></span><span>Nenhuma etapa aberta</span></a>
     {% endif %}
   </header>
 

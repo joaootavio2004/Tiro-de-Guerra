@@ -1,9 +1,9 @@
 """
 Site público de resultados (Fase 2).
 
-Roda no mesmo app/contêiner do bot, lendo o mesmo banco. Mostra a
+Roda no mesmo contêiner da área interna, lendo o mesmo banco. Mostra a
 classificação do mês por categoria, no formato planilha (colunas por etapa,
-descartando a pior). Identidade visual da marca: verde-militar, dourado e branco.
+contando as melhores). Identidade visual da marca: verde-militar, dourado e branco.
 """
 import os
 from fastapi import Request

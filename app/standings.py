@@ -1,6 +1,6 @@
 """
 Monta as classificações (etapa e mês) a partir do banco.
-É usado pelo bot agora e será reaproveitado pelo site depois.
+Usado pelo site público, pela área interna e pelos PDFs.
 """
 from typing import List, Dict, Any, Optional
 from . import db
@@ -40,10 +40,6 @@ def stage_classification(conn, stage_id: int, modality: str,
     return rows
 
 
-def month_stage_ids(conn, month_id: int) -> List[int]:
-    return [s["id"] for s in db.list_stages(conn, month_id)]
-
-
 def month_held_stages(conn, month_id: int):
     """Etapas do mês que já foram realizadas (têm ao menos um resultado, em
     qualquer modalidade), em ordem. É o 'número de etapas do mês'."""
@@ -56,10 +52,6 @@ def month_held_stages(conn, month_id: int):
         if r["c"] > 0:
             held.append(s)
     return held
-
-
-def count_held_stages(conn, month_id: int, modality: str = None) -> int:
-    return len(month_held_stages(conn, month_id))
 
 
 def best_n_for(held: int, best_max: int, min_discard: int) -> int:
@@ -78,67 +70,11 @@ def monthly_best_n(conn, month_id: int, modality: str = None) -> int:
     return best_n_for(held, *webdb.month_rule(conn, month_id))
 
 
-def monthly_classification(conn, month_id: int, modality: str,
-                           category_id: int, best_n: int = None) -> List[Dict[str, Any]]:
-    """
-    Classificação mensal de uma categoria.
-    Contam as melhores etapas do mês (máximo 3; meses curtos descartam a pior).
-    Ex.: 3 etapas -> contam 2; 4 etapas -> contam 3; 5 etapas -> contam 3.
-    """
-    if best_n is None:
-        best_n = monthly_best_n(conn, month_id)
-    stage_ids = month_stage_ids(conn, month_id)
-    # pontos por etapa por atirador
-    per_shooter: Dict[int, List[float]] = {}
-    for sid in stage_ids:
-        times = stage_best_times(conn, sid, modality, category_id)
-        pts = stage_points(times)
-        for shooter_id, p in pts.items():
-            per_shooter.setdefault(shooter_id, []).append(p)
-
-    rows = []
-    for shooter_id, plist in per_shooter.items():
-        sh = db.get_shooter(conn, shooter_id)
-        total = monthly_score(plist, best_n=best_n)
-        rows.append({
-            "shooter_id": shooter_id,
-            "shooter_name": sh["name"] if sh else "?",
-            "total": round(total, 2),
-            "stage_points": [round(x, 2) for x in sorted(plist, reverse=True)],
-        })
-    rows.sort(key=lambda r: -r["total"])
-    for i, r in enumerate(rows, 1):
-        r["pos"] = i
-    return rows
-
-
 def category_roster_ids(conn, month_id, modality, category_id):
     return [r["shooter_id"] for r in conn.execute(
         "SELECT DISTINCT shooter_id FROM month_category "
         "WHERE month_id=? AND modality=? AND category_id=?",
         (month_id, modality, category_id)).fetchall()]
-
-
-def monthly_classification_full(conn, month_id, modality, category_id,
-                                best_n=None):
-    """Classificação incluindo os integrantes que NÃO pontuaram (total 0),
-    para efeito de descida de categoria. Quem pontuou vem primeiro; os zerados
-    no fim, por nome."""
-    cl = monthly_classification(conn, month_id, modality, category_id, best_n)
-    scored = {r["shooter_id"] for r in cl}
-    zeros = []
-    for sid in category_roster_ids(conn, month_id, modality, category_id):
-        if sid in scored:
-            continue
-        sh = db.get_shooter(conn, sid)
-        if sh:
-            zeros.append({"shooter_id": sid, "shooter_name": sh["name"],
-                          "total": 0.0, "stage_points": []})
-    zeros.sort(key=lambda r: r["shooter_name"])
-    full = cl + zeros
-    for i, r in enumerate(full, 1):
-        r["pos"] = i
-    return full
 
 
 def promotion_proposal(conn, month_id: int) -> Dict[str, Any]:
@@ -214,18 +150,11 @@ def apply_promotions(conn, moves: List[Dict[str, Any]]) -> None:
                                 m.get("modality", "pistola"), m["to_id"])
 
 
-def _modality_has_results(conn, stage_id: int, modality: str) -> bool:
-    r = conn.execute(
-        "SELECT COUNT(*) AS c FROM runs ru JOIN enrollments e ON e.id=ru.enrollment_id "
-        "WHERE e.stage_id=? AND e.modality=?", (stage_id, modality)).fetchone()
-    return r["c"] > 0
-
-
 def monthly_table(conn, month_id: int, modality: str, category_id: int,
                   include_roster: bool = False) -> Dict[str, Any]:
     """
     Tabela no formato planilha para o site: TODAS as etapas do mês como colunas,
-    com tempo + pontos por etapa e o total descartando a pior. Vale igual para
+    com tempo + pontos por etapa e o total das melhores etapas. Vale igual para
     pistola e carabina (carabina mostra '—' nas etapas em que não houve carabina).
     """
     stages = month_held_stages(conn, month_id)
@@ -396,44 +325,3 @@ def monthly_table_general(conn, month_id: int, modality: str) -> Dict[str, Any]:
     }
 
 
-def stage_classification_general(conn, stage_id: int,
-                                 modality: str) -> List[Dict[str, Any]]:
-    """Classificação GERAL de uma etapa (todas as categorias juntas)."""
-    times = stage_best_times_general(conn, stage_id, modality)
-    pts = stage_points(times)
-    rows = []
-    for sid, p in pts.items():
-        sh = db.get_shooter(conn, sid)
-        rows.append({
-            "shooter_id": sid,
-            "name": sh["name"] if sh else "?",
-            "time": times[sid],
-            "points": round(p, 2),
-        })
-    rows.sort(key=lambda r: (-r["points"], r["name"]))
-    for i, r in enumerate(rows, 1):
-        r["pos"] = i
-    return rows
-
-
-def monthly_table_combined(conn, month_id: int, modality: str,
-                           categories) -> Dict[str, Any]:
-    """Junta várias categorias numa só tabela (ex.: Pistola Geral), mantendo o
-    rótulo da categoria de cada atirador. Colunas = etapas do mês."""
-    stages = month_held_stages(conn, month_id)
-    best_n = monthly_best_n(conn, month_id)
-    all_rows = []
-    for cat in categories:
-        t = monthly_table(conn, month_id, modality, cat["id"])
-        for r in t["rows"]:
-            r = dict(r)
-            r["category"] = cat["name"]
-            all_rows.append(r)
-    all_rows.sort(key=lambda r: -r["total"])
-    for i, r in enumerate(all_rows, 1):
-        r["pos"] = i
-    return {
-        "stages": [{"number": s["number"], "date": s["date"]} for s in stages],
-        "rows": all_rows,
-        "best_n": best_n,
-    }
