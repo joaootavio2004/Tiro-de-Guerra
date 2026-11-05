@@ -2,8 +2,21 @@
 {% block title %}{{ sh.name }}{% endblock %}
 {% block content %}
 <a class="btn btn-ghost btn-sm" href="/atiradores">{{ ic('chev-l') }} Atiradores</a>
-<h1 class="pg" style="margin-top:12px">{{ sh.name }}</h1>
-<p class="lead">{{ n_enroll }} inscrição(ões) no histórico.</p>
+<div style="display:flex; align-items:center; gap:16px; margin-top:12px; flex-wrap:wrap">
+  {% if has_photo %}<img src="/foto/{{ sh.id }}?v={{ sh.photo_at }}" alt="" style="width:84px; height:84px; border-radius:var(--r); border:2px solid var(--gold); object-fit:cover">
+  {% else %}<span class="avatar" style="width:84px; height:84px; font-size:30px">{{ sh.name[:1] }}</span>{% endif %}
+  <div><h1 class="pg">{{ sh.name }}</h1>
+  <p class="lead" style="margin:0">{{ n_enroll }} inscrição(ões) no histórico{% if has_photo %} · foto enviada em {{ fmt_date(sh.photo_at) }}{% else %} · sem foto de perfil{% endif %}.</p></div>
+</div>
+<form class="box" method="post" action="/atiradores/{{ sh.id }}/foto" enctype="multipart/form-data" style="margin-top:18px">
+  <h2>Foto de perfil</h2>
+  <div class="frow">
+    <div><label>{{ 'Trocar foto' if has_photo else 'Enviar foto' }} (é recortada em quadrado pelo centro)</label><input type="file" name="foto" accept="image/*" style="padding:8px; border:1px solid var(--line); border-radius:var(--r-sm); width:100%"></div>
+    <div><label style="display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; font-family:Inter,sans-serif; font-size:13px; color:var(--text)"><input type="checkbox" name="consent" value="1" style="width:18px; height:18px"> O atirador autorizou o uso da foto</label></div>
+    <div style="display:flex; gap:8px"><button class="btn btn-gold" name="acao" value="enviar">{{ ic('save') }} Salvar foto</button>
+      {% if has_photo %}<button class="btn btn-danger" name="acao" value="remover" formnovalidate onclick="return confirm('Remover a foto de perfil?')">{{ ic('trash') }} Remover</button>{% endif %}</div>
+  </div>
+</form>
 <div class="grid2">
   <form class="box" method="post" action="/atiradores/{{ sh.id }}/editar">
     <h2>Dados</h2>

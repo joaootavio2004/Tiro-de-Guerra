@@ -16,11 +16,11 @@ import logging
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Request, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import APIRouter, File, Request, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from markupsafe import Markup
 
-from . import config, db, texts, util, webdb
+from . import config, db, fotos, texts, util, webdb
 from . import standings as st
 from .website import templates, MONTH_PT, _fmt_date
 
@@ -274,7 +274,9 @@ async def api_linha_atirador(request: Request, shooter_id: int):
             "JOIN runs ru ON ru.enrollment_id=e.id WHERE e.shooter_id=? "
             "GROUP BY e.modality", (shooter_id,)).fetchall()
         return {
-            "shooter": {"id": sh["id"], "name": sh["name"]},
+            "shooter": {"id": sh["id"], "name": sh["name"],
+                        "photo": (f"/foto/{sh['id']}?v={sh['photo_at']}"
+                                  if fotos.has_photo(sh["id"]) else None)},
             "categories": cats,
             "history": {h["modality"]: h["n"] for h in hist},
             "runs": webdb.shooter_stage_runs(conn, stage["id"], shooter_id),
@@ -548,7 +550,47 @@ async def atirador_detail(request: Request, sid: int):
         hist = webdb.shooter_history(conn, sid)
         return render(request, conn, "atirador.html", user, perms, sh=sh, mods=mods,
                       n_enroll=db.count_shooter_enrollments(conn, sid), hist=hist[:20],
-                      month_pt=MONTH_PT)
+                      month_pt=MONTH_PT, has_photo=fotos.has_photo(sid))
+    finally:
+        conn.close()
+
+
+@router.get("/foto/{sid}")
+async def foto_atirador(request: Request, sid: int):
+    """Foto de perfil, só para quem está logado na área interna."""
+    conn = db.get_conn()
+    try:
+        need(request, conn)
+    finally:
+        conn.close()
+    if not fotos.has_photo(sid):
+        raise HTTPException(404)
+    return FileResponse(fotos.path_for(sid), media_type="image/webp",
+                        headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.post("/atiradores/{sid}/foto")
+async def atirador_foto(request: Request, sid: int, acao: str = Form("enviar"),
+                        consent: str = Form(""), foto: UploadFile = File(None)):
+    conn = db.get_conn()
+    try:
+        need(request, conn, "atiradores")
+        if not db.get_shooter(conn, sid):
+            return back("/atiradores", "Atirador não encontrado.")
+        if acao == "remover":
+            fotos.delete_photo(conn, sid)
+            conn.commit()
+            return back(f"/atiradores/{sid}", "Foto removida.")
+        if consent != "1":
+            return back(f"/atiradores/{sid}", "Confirme que o atirador autorizou o uso da foto.")
+        if foto is None:
+            return back(f"/atiradores/{sid}", "Escolha uma foto.")
+        try:
+            fotos.save_photo(conn, sid, await foto.read(fotos.MAX_BYTES + 1), consent=True)
+        except ValueError as e:
+            return back(f"/atiradores/{sid}", str(e))
+        conn.commit()
+        return back(f"/atiradores/{sid}", "Foto atualizada.")
     finally:
         conn.close()
 

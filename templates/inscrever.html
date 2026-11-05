@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Inscrição na etapa — {{ club }}</title>
+<link rel="icon" type="image/png" href="/static/favicon.png">
+{% include "_head.html" %}
+<style>
+  body{min-height:100vh; display:flex; flex-direction:column}
+  .ins{flex:1; display:flex; align-items:flex-start; justify-content:center; padding:28px 16px 40px}
+  .ins-card{width:100%; max-width:420px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:26px 22px}
+  .ins-card .logo{display:block; height:84px; margin:0 auto 14px;
+    filter:drop-shadow(0 0 1px rgba(236,233,218,.85)) drop-shadow(0 0 1px rgba(236,233,218,.85))}
+  .ins-card h1{font-size:28px; text-align:center; line-height:1; margin:0}
+  .ins-card .stage{text-align:center; color:var(--gold); font-family:"Oswald",sans-serif; letter-spacing:.14em;
+    text-transform:uppercase; font-size:12.5px; margin:10px 0 22px}
+  .ins-card p{color:var(--muted); font-size:14.5px; margin:0 0 16px; text-align:center}
+  .ins-card label{display:block; font-family:"Oswald",sans-serif; text-transform:uppercase; letter-spacing:.12em;
+    font-size:11.5px; color:var(--muted); margin-bottom:6px}
+  .ins-card input{width:100%; border:1px solid var(--line); border-radius:6px; background:var(--ink); color:var(--text);
+    font-family:"Inter",sans-serif; font-size:20px; padding:14px; margin-bottom:16px; letter-spacing:.02em}
+  .ins-card input:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft)}
+  .ins-card input[readonly]{color:var(--muted)}
+  .ins-card button{width:100%; border:none; border-radius:6px; background:var(--gold); color:var(--ink); cursor:pointer;
+    font-family:"Oswald",sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; font-size:17px; padding:16px}
+  .ins-card .err{background:rgba(224,122,111,.12); border:1px solid rgba(224,122,111,.4); color:#f3c4be; border-radius:6px;
+    padding:11px 13px; font-size:14px; margin-bottom:16px}
+  .ins-card .done{text-align:center}
+  .ins-card .done .mark{width:72px; height:72px; margin:4px auto 14px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; background:rgba(140,195,122,.14); border:2px solid #8cc37a}
+  .ins-card .done .mark svg{width:36px; height:36px; stroke:#8cc37a; fill:none; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round}
+  .ins-card .done.wait .mark{background:var(--gold-soft); border-color:var(--gold)}
+  .ins-card .done.wait .mark svg{stroke:var(--gold)}
+  .ins-card .done b{display:block; font-family:"Oswald",sans-serif; font-size:26px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px}
+  .ins-card .back{display:block; text-align:center; margin-top:18px; color:var(--muted); font-size:13.5px}
+  /* foto de perfil */
+  .photo{margin-top:22px; padding-top:20px; border-top:1px solid var(--line)}
+  .photo .t{font-family:"Oswald",sans-serif; font-weight:600; text-transform:uppercase; letter-spacing:.06em; font-size:19px; text-align:center; margin-bottom:6px}
+  .pbtns{display:grid; gap:10px}
+  .ins-card .pbtn{display:flex; align-items:center; justify-content:center; gap:10px; border:1px solid var(--khaki); border-radius:6px;
+    background:var(--surface2); color:var(--text); padding:15px; margin:0; cursor:pointer; font-family:"Oswald",sans-serif;
+    font-weight:500; letter-spacing:.1em; text-transform:uppercase; font-size:15.5px}
+  .pbtn svg{width:20px; height:20px; stroke:var(--gold); fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
+  .pbtn input{display:none}
+  .crop-view{position:relative; width:100%; aspect-ratio:1; border-radius:6px; overflow:hidden; background:#000;
+    touch-action:none; cursor:grab; border:2px solid var(--gold)}
+  .crop-view canvas{width:100%; height:100%; display:block}
+  .zoom{display:flex; align-items:center; gap:10px; margin:12px 0 4px; color:var(--muted); font-size:12px}
+  .zoom input{flex:1; margin:0; padding:0; accent-color:var(--gold)}
+  .hint{color:var(--muted); font-size:12.5px; text-align:center; margin-bottom:14px}
+  .chk{display:flex !important; gap:10px; align-items:flex-start; text-transform:none !important; letter-spacing:0 !important;
+    font-family:"Inter",sans-serif !important; font-size:13px !important; color:var(--text) !important; line-height:1.45; margin-bottom:14px}
+  .chk input{width:20px; height:20px; margin:1px 0 0; flex:none; accent-color:var(--gold)}
+  .ghost{background:transparent !important; color:var(--muted) !important; border:1px solid var(--line) !important; margin-top:10px}
+  .pmsg{margin-top:12px; text-align:center; font-size:14px}
+  .pmsg.err{color:#f3c4be} .pmsg.ok{color:#8cc37a}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+<main class="ins">
+  <div class="ins-card">
+    <img class="logo" src="/static/logo.png" alt="{{ club }}">
+    <h1>Inscrição na etapa</h1>
+    {% if stage %}<div class="stage">{{ stage }}</div>{% else %}<div class="stage">&nbsp;</div>{% endif %}
+
+    {% if error %}<div class="err">{{ error }}</div>{% endif %}
+
+    {% if state == 'fechado' %}
+      <div class="done wait">
+        <div class="mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4.5l3 2"/></svg></div>
+        <b>Sem etapa aberta</b>
+        <p>Não há etapa aberta no momento. As inscrições abrem no dia da etapa; em caso de dúvida, procure a recepção.</p>
+      </div>
+
+    {% elif state == 'cpf' %}
+      <p>Digite seu CPF para confirmar presença.</p>
+      <form method="post" action="/inscrever-me" autocomplete="off">
+        <label for="cpf">CPF</label>
+        <input id="cpf" name="cpf" value="{{ cpf or '' }}" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" required autofocus>
+        <button>Continuar</button>
+      </form>
+
+    {% elif state == 'nome' %}
+      <p>Primeira vez por aqui? Informe seu nome completo para concluir o cadastro.</p>
+      <form method="post" action="/inscrever-me" autocomplete="off">
+        <label for="cpf">CPF</label>
+        <input id="cpf" name="cpf" value="{{ cpf }}" readonly>
+        <label for="nome">Nome completo</label>
+        <input id="nome" name="nome" value="{{ nome or '' }}" autocapitalize="characters" placeholder="Nome e sobrenome" required autofocus>
+        <button>Confirmar inscrição</button>
+      </form>
+      <a class="back" href="/inscrever-me">Corrigir o CPF</a>
+
+    {% elif state in ('ok', 'ja', 'foto') %}
+      {% if state == 'foto' %}
+      <div class="done wait" id="needBox">
+        <div class="mark"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></div>
+        <b>Falta só a foto</b>
+        <p>{{ first }}, a partir da 3ª etapa do mês a foto de perfil é obrigatória para se inscrever. Envie abaixo para concluir.</p>
+      </div>
+      {% endif %}
+      <div class="done{% if state == 'foto' %} hide{% endif %}" id="doneBox">
+        <div class="mark"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+        <b>{{ 'Você já está inscrito' if state == 'ja' else 'Inscrição confirmada' }}</b>
+        <p>{{ first }}, sua presença na etapa está registrada. Aguarde ser chamado na linha de tiro.</p>
+      </div>
+      {% if photo_token %}
+      <div class="photo" id="photo">
+        {% if photo_required %}<div class="t">Sua foto de perfil</div>
+        <p>Use uma foto do rosto, de frente e sem óculos escuros.</p>
+        {% else %}<div class="t">Falta sua foto de perfil</div>
+        <p>Ela ajuda o RO a confirmar quem está na pista e aparece no pódio das etapas. A partir da 3ª etapa do mês ela passa a ser obrigatória.</p>{% endif %}
+        <div class="pbtns" id="pick">
+          <label class="pbtn"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+            Tirar foto agora<input type="file" accept="image/*" capture="user"></label>
+          <label class="pbtn"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-5-5-8 8.5"/></svg>
+            Escolher da galeria<input type="file" accept="image/*"></label>
+        </div>
+        <div id="crop" class="hide">
+          <div class="crop-view" id="view"><canvas id="cv" width="640" height="640"></canvas></div>
+          <div class="zoom"><span>Zoom</span><input type="range" id="zoom" min="1" max="4" step="0.01" value="1"></div>
+          <div class="hint">Arraste a foto para centralizar o rosto.</div>
+          <label class="chk"><input type="checkbox" id="consent">
+            <span>Autorizo o {{ club }} a usar esta foto para me identificar na linha de tiro e a exibi-la no site do clube (classificação e pódio). Estou ciente de que, a partir da 3ª etapa do mês, a foto é condição para a inscrição pelo site, e de que posso pedir à recepção a remoção da foto do site a qualquer momento.</span></label>
+          <button type="button" id="send">Enviar foto</button>
+          <button type="button" class="ghost" id="again">Escolher outra</button>
+        </div>
+        <div class="pmsg" id="pmsg"></div>
+        {% if not photo_required %}<a class="back" href="/" id="skip">Agora não</a>{% endif %}
+      </div>
+      {% else %}
+      <a class="back" href="/">Ver a classificação</a>
+      {% endif %}
+    {% endif %}
+  </div>
+</main>
+<script>
+  // máscara do CPF enquanto digita
+  var c = document.getElementById('cpf');
+  if (c && !c.readOnly) c.addEventListener('input', function () {
+    var v = this.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 9) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6,9)+'-'+v.slice(9);
+    else if (v.length > 6) v = v.slice(0,3)+'.'+v.slice(3,6)+'.'+v.slice(6);
+    else if (v.length > 3) v = v.slice(0,3)+'.'+v.slice(3);
+    this.value = v;
+  });
+</script>
+{% if photo_token %}
+<script>
+(function () {
+  // recorte quadrado: a foto cobre sempre o quadro; arrastar move, a barra aproxima
+  var TOKEN = {{ photo_token|tojson }}, REQUIRED = {{ 'true' if photo_required else 'false' }};
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d'), N = cv.width;
+  var zoom = document.getElementById('zoom'), view = document.getElementById('view');
+  var img = null, base = 1, ox = 0, oy = 0, drag = null;
+  var msg = document.getElementById('pmsg');
+  function say(t, cls) { msg.textContent = t; msg.className = 'pmsg ' + (cls || ''); }
+
+  function draw() {
+    var s = base * zoom.value, w = img.width * s, h = img.height * s;
+    var mx = (w - N) / 2, my = (h - N) / 2;
+    ox = Math.max(-mx, Math.min(mx, ox)); oy = Math.max(-my, Math.min(my, oy));
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, N, N);
+    ctx.drawImage(img, N / 2 - w / 2 + ox, N / 2 - h / 2 + oy, w, h);
+  }
+  function load(file) {
+    if (!file) return;
+    var im = new Image();
+    im.onload = function () {
+      img = im; base = Math.max(N / im.width, N / im.height); zoom.value = 1; ox = oy = 0; draw();
+      document.getElementById('pick').classList.add('hide');
+      document.getElementById('crop').classList.remove('hide'); say('');
+    };
+    im.onerror = function () { say('Não consegui abrir essa imagem. Tente outra.', 'err'); };
+    im.src = URL.createObjectURL(file);
+  }
+  document.querySelectorAll('#pick input').forEach(function (i) {
+    i.addEventListener('change', function () { load(this.files[0]); this.value = ''; });
+  });
+  zoom.addEventListener('input', function () { if (img) draw(); });
+  view.addEventListener('pointerdown', function (e) { drag = {x: e.clientX, y: e.clientY}; view.setPointerCapture(e.pointerId); });
+  view.addEventListener('pointermove', function (e) {
+    if (!drag || !img) return;
+    var k = N / view.clientWidth;
+    ox += (e.clientX - drag.x) * k; oy += (e.clientY - drag.y) * k;
+    drag = {x: e.clientX, y: e.clientY}; draw();
+  });
+  view.addEventListener('pointerup', function () { drag = null; });
+  view.addEventListener('pointercancel', function () { drag = null; });
+  document.getElementById('again').addEventListener('click', function () {
+    document.getElementById('crop').classList.add('hide');
+    document.getElementById('pick').classList.remove('hide'); say('');
+  });
+  document.getElementById('send').addEventListener('click', function () {
+    if (!document.getElementById('consent').checked) { say('Marque a autorização para enviar.', 'err'); return; }
+    var btn = this; btn.disabled = true; say('Enviando…');
+    cv.toBlob(function (blob) {
+      var fd = new FormData();
+      fd.append('token', TOKEN); fd.append('consent', '1'); fd.append('foto', blob, 'foto.jpg');
+      fetch('/inscrever-me/foto', {method: 'POST', body: fd})
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) {
+            document.getElementById('crop').classList.add('hide');
+            var skip = document.getElementById('skip'); if (skip) skip.textContent = 'Ver a classificação';
+            if (REQUIRED) {
+              document.getElementById('needBox').classList.add('hide');
+              document.getElementById('doneBox').classList.remove('hide');
+              document.querySelector('#photo .t').classList.add('hide');
+              document.querySelector('#photo > p').classList.add('hide');
+            }
+            say('Foto enviada. Obrigado!', 'ok');
+          } else { btn.disabled = false; say(d.error || 'Não foi possível enviar.', 'err'); }
+        })
+        .catch(function () { btn.disabled = false; say('Falha de conexão. Tente de novo.', 'err'); });
+    }, 'image/jpeg', 0.9);
+  });
+})();
+</script>
+{% endif %}
+</body>
+</html>

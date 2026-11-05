@@ -77,6 +77,11 @@ def migrate(conn) -> None:
         conn.execute("ALTER TABLE runs ADD COLUMN segments INTEGER")
     if "created_by_user" not in cols:
         conn.execute("ALTER TABLE runs ADD COLUMN created_by_user INTEGER")
+    # foto de perfil (arquivo em fotos/<id>.webp) e aceite de uso da imagem
+    scols = [r["name"] for r in conn.execute("PRAGMA table_info(shooters)")]
+    if "photo_at" not in scols:
+        conn.execute("ALTER TABLE shooters ADD COLUMN photo_at TEXT")
+        conn.execute("ALTER TABLE shooters ADD COLUMN photo_consent_at TEXT")
     # regra do mês congelada no fechamento (meses fechados nunca recalculam)
     mcols = [r["name"] for r in conn.execute("PRAGMA table_info(months)")]
     if "rule_best_max" not in mcols:
@@ -257,8 +262,12 @@ def stage_participants(conn, stage_id: int) -> List[Dict[str, Any]]:
             (stage_id, r["id"])).fetchall()
         by_mod = {x["modality"]: x["n"] for x in runs}
         total = sum(by_mod.values())
+        # check-in sem usuário = feito pelo próprio atirador (QR / inscrever-me)
+        ck = conn.execute("SELECT created_by FROM stage_checkins WHERE stage_id=? AND shooter_id=?",
+                          (stage_id, r["id"])).fetchone()
         out.append({"id": r["id"], "name": r["name"], "name_key": util.norm_name(r["name"]),
-                    "runs": total, "by_modality": by_mod})
+                    "runs": total, "by_modality": by_mod,
+                    "self": bool(ck and ck["created_by"] is None)})
     return out
 
 

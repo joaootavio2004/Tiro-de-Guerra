@@ -3,7 +3,11 @@
 Sistema de inscrições e resultados do **GUERRA Clube de Tiro**.
 
 - **Site público** (`tirodeguerra.com.br`): classificação do mês por categoria,
-  etapa ao vivo e estatísticas do atirador.
+  etapa ao vivo, estatísticas do atirador e **autoinscrição**
+  (`/inscrever-me`, pelo QR code em `impressos/qr-inscricao-etapa.pdf`): o
+  atirador digita o CPF (e o nome, se for novo) e fica presente na etapa aberta.
+  A foto de perfil é pedida a quem não tem; é obrigatória a partir da 3ª etapa
+  do mês (`PHOTO_REQUIRED_FROM_STAGE` em `app/autoinscricao.py`).
 - **Área interna** (`admin.tirodeguerra.com.br`): recepção, linha de tiro (timer
   Bluetooth e impressora térmica), lançamentos, cadastro, etapas, categorias,
   indicadores e usuários.
@@ -34,8 +38,8 @@ etapa.
    - `ADMIN_HOST`: domínio da área interna (padrão `admin.tirodeguerra.com.br`).
    - `SITE_URL`: endereço público, impresso no QR do cupom térmico.
    - Opcionais: `CLUB_NAME`, `TZ`, `DB_PATH`.
-4. **Volume persistente** em `/app/data` (banco, backups das limpezas e,
-   futuramente, fotos). Configure cópia periódica desse volume.
+4. **Volume persistente** em `/app/data` (banco, backups das limpezas e fotos
+   de perfil em `fotos/`). Configure cópia periódica desse volume.
 5. **Deploy**. No primeiro start com volume vazio, o histórico de `seed/` é
    carregado. Para começar do zero, apague `seed/` antes de implantar.
 

@@ -32,6 +32,8 @@
   .wband .w b{display:block; font-family:"Oswald",sans-serif; font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:22px; line-height:1}
   .wband .w span{font-size:13px; color:var(--text); opacity:.85}
   .wband.none{--mc:#55685d; border-style:dashed}
+  .ph{width:76px; height:76px; flex:none; border-radius:var(--r); object-fit:cover; border:2px solid var(--gold)}
+  .ph.big{display:block; width:120px; height:120px; margin:10px auto 4px}
   /* ficha de confirmação */
   .sheet{position:fixed; inset:0; z-index:70; background:rgba(4,8,6,.78); display:flex; align-items:center; justify-content:center; padding:16px}
   .sheet-card{width:100%; max-width:440px; max-height:100%; overflow:auto; background:var(--panel); border:1px solid var(--line);
@@ -105,7 +107,10 @@
   <button class="btn btn-ghost btn-sm" onclick="go('pick')">{{ ic('chev-l') }} Voltar à lista</button>
   <div class="box" style="margin-top:12px">
     <h2 style="margin-bottom:6px">Atirador</h2>
-    <p class="big-name" id="shName">—</p>
+    <div style="display:flex; align-items:center; gap:14px">
+      <img id="shPhoto" class="ph hide" alt="">
+      <p class="big-name" id="shName">—</p>
+    </div>
     <div id="shRunsBox" class="hide" style="margin-top:12px">
       <button class="btn btn-block" id="shRunsBtn" onclick="toggleRuns()">{{ ic('list') }} Resultados lançados</button>
       <div id="shRuns" class="hide" style="margin-top:10px"></div>
@@ -188,6 +193,7 @@
 <div class="sheet hide" id="sheet" role="dialog" aria-modal="true">
   <div class="sheet-card">
     <div class="hd" id="shtHead">Confira antes de iniciar</div>
+    <img id="shtPhoto" class="ph big hide" alt="">
     <div class="who" id="shtWho">—</div>
     <div class="wbig" id="shtWeapon"></div>
     <div class="sum hide" id="shtSum"></div>
@@ -278,6 +284,8 @@ async function pickShooter(id){
     var d = await api('/api/linha/atirador/'+id);
     SH = d.shooter; CATS = d.categories; SHRUNS = d.runs || []; HIST = d.history || {};
     $('shName').textContent = SH.name;
+    // foto de perfil: o RO confere o rosto antes de iniciar
+    [$('shPhoto'), $('shtPhoto')].forEach(function(el){ el.classList.toggle('hide', !SH.photo); if(SH.photo) el.src = SH.photo; });
     $('shRunsBox').classList.toggle('hide', !SHRUNS.length);
     $('shRunsBtn').innerHTML = IC('list')+' Resultados lançados ('+SHRUNS.length+')';
     $('shRuns').classList.add('hide');

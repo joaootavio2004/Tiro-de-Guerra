@@ -74,7 +74,7 @@ function bindCPF(el){ el.addEventListener('input', function(){ this.value=maskCP
 function renderList(){
   $('cnt').textContent = PARTS.length;
   $('list').innerHTML = PARTS.map(function(p){
-    return '<div class="item'+(p.runs?' done':'')+'"><div class="who"><div class="nm">'+esc(p.name)+'</div><div class="meta">'+(p.runs?p.runs+' passada'+(p.runs>1?'s':'')+' lançada'+(p.runs>1?'s':''):'aguardando')+'</div></div>'+
+    return '<div class="item'+(p.runs?' done':'')+'"><div class="who"><div class="nm">'+esc(p.name)+(p.self?' <span class="tag" title="Inscrição feita pelo próprio atirador (QR code)">QR</span>':'')+'</div><div class="meta">'+(p.runs?p.runs+' passada'+(p.runs>1?'s':'')+' lançada'+(p.runs>1?'s':''):'aguardando')+'</div></div>'+
       (p.runs?'':'<button class="btn btn-sm btn-danger" onclick="removeP('+p.id+')">Remover</button>')+'</div>';
   }).join('') || '<div class="muted small">Ninguém marcado ainda.</div>';
 }

@@ -65,6 +65,10 @@ from app.interno_admin import router as interno_admin_router  # noqa: E402
 web.include_router(interno_router)
 web.include_router(interno_admin_router)
 
+# Autoinscrição pública na etapa aberta (/inscrever-me, via QR code)
+from app.autoinscricao import router as autoinscricao_router  # noqa: E402
+web.include_router(autoinscricao_router)
+
 # Subdomínio da área interna (admin.*) -> rotas /interno
 from app.hosts import AdminHostMiddleware  # noqa: E402
 web.add_middleware(AdminHostMiddleware, admin_host=config.ADMIN_HOST)
